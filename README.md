@@ -1,7 +1,5 @@
 # opm-preproc
-OPM preprocessing pipeline developed by [Harrison Ritz](https://github.com/harrisonritz) (2025)
-
-Built on [mne-python](https://github.com/mne-tools/mne-python) and [osl-ephys](https://github.com/OHBA-analysis/osl-ephys). 
+OPM preprocessing pipelin built on [mne-python](https://github.com/mne-tools/mne-python) and [osl-ephys](https://github.com/OHBA-analysis/osl-ephys). 
 
 Grateful for advice from [Lukas Rier](https://github.com/LukasRier).
 
