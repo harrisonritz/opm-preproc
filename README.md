@@ -1,5 +1,5 @@
 # opm-preproc
-OPM preprocessing pipelin built on [mne-python](https://github.com/mne-tools/mne-python) and [osl-ephys](https://github.com/OHBA-analysis/osl-ephys). 
+OPM preprocessing pipeline built on [mne-python](https://github.com/mne-tools/mne-python) and [osl-ephys](https://github.com/OHBA-analysis/osl-ephys). 
 
 Grateful for advice from [Lukas Rier](https://github.com/LukasRier).
 
