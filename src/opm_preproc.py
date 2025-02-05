@@ -168,7 +168,7 @@ def set_preproc_params(S, config_path=""):
     HFC:
         run: True
         plot: False
-        order: 10
+        order: 3
         apply: True
 
     temporal_filter:
@@ -198,7 +198,7 @@ def set_preproc_params(S, config_path=""):
         run: True
         plot_axes: ['Z'] 
         tstep: 1.0
-        n_components: 10
+        n_components: 64
         method: "picard"
         params: {"ortho": True, "extended": True}
         decim: 4
