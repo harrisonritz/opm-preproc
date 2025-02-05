@@ -15,6 +15,7 @@ import gc
 import psutil
 import time
 import yaml
+import sys
 
 
 # MEG imports ---------------------------------------------------------
@@ -39,62 +40,13 @@ from osl.osl_wrappers import (
 
 from plot.plot_ica_axis import plot_ica_axis
 
-
-# decoding ---------------------------------------------------------
-from sklearn.pipeline import make_pipeline
-from sklearn.preprocessing import StandardScaler
-from sklearn.svm import LinearSVC
-from mne.decoding import (
-    CSP,
-    GeneralizingEstimator,
-    LinearModel,
-    Scaler,
-    SlidingEstimator,
-    Vectorizer,
-    cross_val_multiscore,
-    get_coef,
-)
-from sklearn.model_selection import ShuffleSplit, cross_val_score
-
-
+import eval.eval_preproc
 
 
 
 
 
 # add axis methods to mne classes ==========================================================================================================
-
-def rm_axis(self, axis='Z'):
-    """Pick MEG sensors along specified axis.
-
-    Selects MEG sensors oriented along a given axis using regular expressions matching
-    on channel names. Returns a copy of the data with only the selected channels.
-
-    Parameters
-    ----------
-    axis : str, default="Z"
-        The axis to select sensors from. Must be one of: "X", "Y", or "Z".
-        Case-sensitive.
-
-    Returns
-    -------
-    instance
-        A new instance containing only the channels matching the specified axis.
-        Original instance remains unmodified.
-
-    Notes
-    -----
-    - Channel names must follow the format: 'XX[axis]' where XX are any characters
-      and axis is the orientation (X, Y, or Z)
-    - Creates a copy to preserve the original data
-
-    Harrison Ritz, 2025
-    """
-   
-    axis_picks = mne.pick_channels_regexp(self.info["ch_names"], f'^..\\[{axis}]$')
-    return self.copy().pick([self.ch_names[i] for i in axis_picks])
-
-
 
 def misc_axis(self, axis='Z'):
     """Pick sensors axis by setting non-axis channels to 'misc'.
@@ -121,7 +73,7 @@ def misc_axis(self, axis='Z'):
     """
    
 
-    axis_picks = mne.pick_channels_regexp(self.info["ch_names"], f'^..\\[{axis}]$')
+    axis_picks = mne.pick_channels_regexp(self.info['ch_names'], f"^..\\[{axis}]$")
 
     # Create a mask for non-matching columns
     non_axis_picks = np.ones(self.info['nchan'], dtype=bool)
@@ -136,18 +88,13 @@ def misc_axis(self, axis='Z'):
 
     return self_copy
 
-
-def pick_axis(inst, axis='Z'): mne.pick_channels_regexp(inst.info['ch_names'], regexp=rf".*{axis}$")
-
-
-# Add methods to mne classes
-mne.Epochs.get_axis = rm_axis
-mne.io.Raw.get_axis = rm_axis
-mne.Evoked.get_axis = rm_axis
-
-mne.Epochs.misc_axis = misc_axis
 mne.preprocessing.ICA.get_axis = misc_axis
 mne.time_frequency.Spectrum.get_axis = misc_axis
+
+def pick_axis(inst, axis='Z'): 
+    return mne.pick_channels_regexp(inst.info['ch_names'], regexp=f"^..\\[{axis}]$")
+
+
 
 
 
@@ -163,251 +110,227 @@ def print_memory_usage():
 
 
 
-def set_participant_params(param, config=""):
+def set_preproc_params(S, config_path=""):
 
+    # set-up configuration ==========================================================================================================
+    print("\n\n\nloading configuration ---------------------------------------------------\n")
 
-    if config == "":
+    # baseline configuration (set for oddball example)
+    base_config = """
+    participant:
+        id: 2
+        session: 1
+        run: 1
+        task: "oddball"
+        datatype: "meg"
+        known_bads: [
+            '2E[X]', '2E[Y]', '2E[Z]', 
+            '2Z[X]', '2Z[Y]', '2Z[Z]', 
+            '29[X]', '29[Y]', '29[Z]',
+        ]
+        do_BIDS: True
+        data_root: "/Users/hr0283/Projects/opm-preproc/examples/oddball"
+        data_path:          # set manually if not using BIDS
+        emptyroom_path:     # set manually if not using BIDS
 
-        config = """
-            participant: 2
-            session: 1
-            run: 1
-            task: "oddball"
-            datatype: "meg"
-            device: "opm"
-            bids_root: "/Users/hr0283/Brown Dropbox/Harrison Ritz/opm_data/data/oddball-pilot/bids"
-            known_bads: ['2E[X]','2E[Y]','2E[Z]', '2Z[X]','2Z[Y]','2Z[Z]', '29[X]','29[Y]','29[Z]']
-        """
+    info:
+        sample_rate:
+        line_freq:
 
-    param = yaml.safe_load(config)
+    general:
+        save_name: "test-preproc"
+        save_label: "test-preproc_"
+        save_preproc: True
+        save_param: True
+        save_report: True
+        n_jobs: -1
+        speed_run: False
 
-    return param
+    read_data:
+        plot: False
 
+    eval_preproc:
+        run: [False, False, True]
+        function: eval.eval_preproc.eval_oddball
+        cv: 10
+        plot_axes: ['Z']
+        save: False
 
+    channel_reject:
+        run: True
+        plot: False
+        method: "osl"  
+        dur: 5.0
+        filter: True
+        eSSS: False
+        sec: 1.0
 
-def set_preproc_params(param, config=""):
+    HFC:
+        run: True
+        plot: False
+        order: 10
+        apply: True
 
-    # if config == "":
-    #     config = """
-    #     participant
-    #         - id: 2
-    #         - session: 1
-    #         - run: 1
-    #         - task: "oddball"
-    #         - datatype: "meg"
-    #         - bids_root: "/Users/hr0283/Brown Dropbox/Harrison Ritz/opm_data/data/oddball-pilot/bids"
-    #         - known_bads: ['2E[X]','2E[Y]','2E[Z]', '2Z[X]','2Z[Y]','2Z[Z]', '29[X]','29[Y]','29[Z]']
-    #     general:
-    #         - save_name: "test-preproc"
-    #         - save_label: "test-preproc_"
-    #         - save_preproc: True
-    #         - save_param: True
-    #         - save_report: True
-    #         - n_jobs: -1
-    #         - speed_run: False
-    #     preproc:
-    #         - resample: {sfreq: 150}
-    #         - filter: {l_freq: 4, h_freq: 40, method: iir, iir_params: {order: 5, ftype: butter}}
-    #         - bad_segments: {segment_len: 300, picks: mag, significance_level: 0.25}
-    #         - bad_channels: {picks: meg, significance_level: 0.4}        
-    #     """
+    temporal_filter:
+        run: True
+        plot: False
+        plot_topos: False
+        plot_bands: {
+            'Delta (0-4 Hz)': [0, 4], 
+            'Theta (4-8 Hz)': [4, 8], 
+            'Alpha (8-12 Hz)': [8, 12], 
+            'Beta (12-30 Hz)': [12, 30], 
+            'Gamma (30-45 Hz)': [30, 45]
+        }
+        plot_bands_trouble: {'OPM Trouble (13-16 Hz)': [13, 16]}
+        plot_axis: ['X', 'Y', 'Z']
+        range: [0.1, 30]
+        window: "blackman"
+        notch_spectrum: True
 
-    #     param = yaml.safe_load(config)
+    segment_reject:
+        run: True
+        plot: False
+        thresh: 0.05
+        sec: 1.0
 
+    ICA:
+        run: True
+        plot_axes: ['Z'] 
+        tstep: 1.0
+        n_components: 10
+        method: "picard"
+        params: {"ortho": True, "extended": True}
+        decim: 4
+        auto_label: False
+        apply: True
+        save: False
+        load: False
 
-    # general settings ---------------------------------------------------------
-    param["save_name"] = "test-preproc"
-    param["save_label"] = f'{param["save_name"]}_'
+    epoch:
+        plot: False
+        tmin: -0.5
+        tmax: 0.5
+        decim: 2
 
-    param["save_preproc"] = True
-    param["save_param"] = True
-    param["save_report"] = True
+    epoch_reject:
+        run: True
+        reject_plot: False
+        method: 'osl'
+        ar-interp: [0, 1, 2, 3]
+    """
 
-    param["n_jobs"] = -1
+    # Load config file
+    S = yaml.safe_load(base_config)
+    if config_path:
+        print(f"\n\nloading config: {config_path}\n")
+        with open(config_path, 'r') as stream:
+            proc = yaml.safe_load(stream)
+        S.update(proc)
+        S['participant']['config_path'] = config_path
 
-    param["speed_run"] = False
-    print("speed run: ", param["speed_run"])
-
-
-
-    # intial plot ---------------------------------------------------------
-    param["load_plot"] = False
-
-
-    # assessment ---------------------------------------------------------
-    param["do_assess"] = [False, True, True]
-    param['assess_cv'] = 10
-    param['assess_plot_axes'] = ['Z']
-    param['assess_save'] = False
-
-
-    # channel rejection settings -----------------------------------------
-    param["do_channel_reject"] = True
-    param["channel_reject_method"] = "osl"
-    param['channel_reject_sec'] = 5.0
-    param['channel_reject_filter'] = True
-    param['chanel_reject_eSSS'] = False
-    param["channel_reject_plot"] = False
-
-
-    # HFC settings ---------------------------------------------------------
-    param['do_hfc'] = True
-    param["hfc_order"] = 10
-    param['hfc_apply'] = True
-    param["hfc_plot"] = False
-
-
-    # fitler settings -----------------------------------------
-    param["do_filter"] = True
-    param["filter_range"] = (.1, 30) # Hz
-    param["filter_window"] = "blackman"
-    param['filter_notch_spectrum'] = True
-
-    param["filter_plot"] = False
-    param["filter_plot_bands_trouble"] = {'OPM Trouble (13-16 Hz)': (13, 16)}
-    
-    param["filter_plot_bands"] = {'Delta (0-4 Hz)': (0, 4), 'Theta (4-8 Hz)': (4, 8),
-         'Alpha (8-12 Hz)': (8, 12), 'Beta (12-30 Hz)': (12, 30),
-         'Gamma (30-45 Hz)': (30, 45)}
-    param['filter_plot_axis'] = ['X','Y','Z']
-    
-    
-    # segment rejection settings -----------------------------------------
-    param["do_segment_reject"] = True
-    param["segment_reject_thresh"] = .05
-    param["segment_reject_sec"] = 1.0
-    param["segment_reject_plot"] = False
-
-
-    # ICA settings ---------------------------------------------------------
-    param["do_ica"] = True
-    param["ica_tstep"] = param["segment_reject_sec"]
-    param["ica_n_components"] = 64
-    param["ica_method"] = "picard"
-    param["ica_params"] = {"ortho":True, "extended":True}
-    param["ica_decim"] = 4
-
-    param['ica_auto_all'] = False
-    param["ica_plot_axes"] = ['Z']
-
-    param["ica_apply"] = True
-    param["ica_save"] = False
-
-
-    # epoch settings ---------------------------------------------------------
-    param["epoch_tmin"] = -0.5
-    param["epoch_tmax"] = 0.5
-    param['epoch_plot'] = False
-    param['epoch_decim'] = 2
-
-
-    # epoch reject settings ---------------------------------------------------------
-    param["do_epoch_reject"] = True
-    param["epoch_reject_method"] = 'osl'
-    param["epoch_reject_ar-interp"] = [0,1,2,3]
-    param["epoch_reject_plot"] = True
-
-
-    # speed run settings ---------------------------------------------------------
-    if param["speed_run"]:
-        
+    # Adjust general parameters if needed
+    if S['general']['speed_run']:
         print('\nSPEED RUN ========================================== \n')
-        print("I want you to run as fast as you can")
-        print("As fast as I can?")
-        print("As fast as you can\n")
-
-        param["load_plot"] = False
-        param["hfc_plot"] = False
-        param["filter_plot"] = False
-        param["epoch_plot"] = False
-        param["epoch_reject_plot"] = False
-
-        param["ica_n_components"] = 8
-        param["ica_save"] = False
-        param["ica_apply"] = True
-        param['ica_auto_all'] = False
-        param['ica_decim'] = 6
-
+        S['HFC']['plot'] = False
+        S['temporal_filter']['plot'] = False
+        S['epoch']['plot'] = False
+        S['epoch_reject']['plot'] = False
+        S['ICA']['n_components'] = 8
+        S['ICA']['save'] = False
+        S['ICA']['apply'] = True
+        S['ICA']['auto_label'] = False
+        S['ICA']['decim'] = 6
     
-    print("\n CONFIGURATION ========================================== \n")
-    print(param)
-    print(param["save_label"])
+    print("\nCONFIGURATION:")
+    print(S)
+    print('\nsave label: ', S['general']['save_label'])
+    if any(S['eval_preproc']):
+        print(f"custom eval function: {S['eval_preproc']['function']}\n")
 
-    return param
-
-
-
-def make_paths(param):
-    # make paths ==========================================================================================================
-    print("\n\n\nMaking paths ---------------------------------------------------\n")
-
-
-    param["bids_path"] = BIDSPath(
-        subject = f"{param["participant"]:03}", 
-        session = f"{param["session"]:02}", 
-        task = param["task"],
-        run = f"{param["run"]:02}",
-        datatype = param["datatype"], 
-        root = param["bids_root"]
-    )
-
-    param["emptyroom_path"] = BIDSPath(
-        subject = f"{param["participant"]:03}", 
-        session = f"{param["session"]:02}", 
-        task = 'emptyroom',
-        run = f"{param["run"]:02}",
-        datatype = param["datatype"], 
-        root = param["bids_root"]
-    )
-
-
-    # Create directories for ICA and preproc files
-    ica_dir = os.path.join(param["bids_root"], "derivatives", "ICA")
-    os.makedirs(ica_dir, exist_ok=True)
-    param["ica_fname"] = os.path.join(ica_dir, f"{param["bids_path"].basename}-ica.fif")
-
-
-    # Create directories for preproc & parameter files
-    preproc_dir = os.path.join(param["bids_root"], "derivatives", "preproc")
-    os.makedirs(preproc_dir, exist_ok=True)
-    param["preproc_fname"] = os.path.join(preproc_dir, f"{param["bids_path"].basename}_{param["save_label"]}_preproc_epo.fif")
-    param["param_fname"] = os.path.join(preproc_dir, f"{param["bids_path"].basename}_{param["save_label"]}_preproc_params.json")
-
-
-    # Create directories for ICA and preproc files
-    report_dir = os.path.join(param["bids_root"], "derivatives", "report")
-    os.makedirs(report_dir, exist_ok=True)
-    param["report_fname"] = os.path.join(report_dir, f"{param["bids_path"].basename}_{param["save_label"]}_preproc_report.html")
-
+        module_name, func_name = S['eval_preproc']['function'].rsplit('.', 1)
+        mod = __import__(module_name, fromlist=[func_name])
+        S['eval_preproc']['function'] = getattr(mod, func_name)
+       
 
 
     print("\n---------------------------------------------------\n")
-    return param
+    return S
+    
+
+
+def make_paths(S):
+
+    print("\n\n\nMaking paths ---------------------------------------------------\n")
+    if S['participant']['do_BIDS']:
+        bids_path = BIDSPath(
+            subject = f"{S['participant']['id']:03}", 
+            session = f"{S['participant']['session']:02}", 
+            task = S['participant']['task'],
+            run = f"{S['participant']['run']:02}",
+            datatype = S['participant']['datatype'], 
+            root = S['participant']['data_root']
+        )
+        S['participant']['data_path'] = bids_path
+
+        emptyroom_path = BIDSPath(
+            subject = f"{S['participant']['id']:03}", 
+            session = f"{S['participant']['session']:02}", 
+            task = 'emptyroom',
+            run = f"{S['participant']['run']:02}",
+            datatype = S['participant']['datatype'], 
+            root = S['participant']['data_root']
+        )
+        S['participant']['emptyroom_path'] = emptyroom_path
+
+    elif S['participant']['data_path']:
+        print('BIDS path not set. Using manual path.')
+    else:
+        warnings.warn("BIDS path not set. Add code here to set the file path manually.")
+
+   
+
+    ica_dir = os.path.join(S['participant']['data_root'], "derivatives", "ICA")
+    os.makedirs(ica_dir, exist_ok=True)
+    S['general']['ica_fname'] = os.path.join(ica_dir, f"{bids_path.basename}-ica.fif")
+
+    preproc_dir = os.path.join(S['participant']['data_root'], "derivatives", "preproc")
+    os.makedirs(preproc_dir, exist_ok=True)
+    S['general']['preproc_fname'] = os.path.join(preproc_dir, f"{bids_path.basename}_{S['general']['save_label']}_preproc_epo.fif")
+    S['general']['param_fname'] = os.path.join(preproc_dir, f"{bids_path.basename}_{S['general']['save_label']}_preproc_params.json")
+
+    report_dir = os.path.join(S['participant']['data_root'], "derivatives", "report")
+    os.makedirs(report_dir, exist_ok=True)
+    S['general']['report_fname'] = os.path.join(report_dir, f"{bids_path.basename}_{S['general']['save_label']}_preproc_report.html")
+
+    print("\n---------------------------------------------------\n")
+    return S
 
 
 
-def read_data(param):
+def read_data(S):
+
     # read-in data ==========================================================================================================
     print("\n\n\nReading in data ---------------------------------------------------\n")
-    print(f"Participant: {param['participant']}, Session: {param['session']}, Run: {param['run']}, Task: {param['task']}, Datatype: {param['datatype']}")
-    print(f"BIDS path: {param["bids_path"]}")
+    print(f"Participant: {S['participant']['id']}, Session: {S['participant']['session']}, Run: {S['participant']['run']}, Task: {S['participant']['task']}, Datatype: {S['participant']['datatype']}")
+    print(f"data path: {S['participant']['data_path']}")
 
 
     # Read in raw file
     raw = read_raw_bids(
-        bids_path=param["bids_path"], 
+        bids_path=S['participant']['data_path'], 
         extra_params=dict(preload=True))
 
 
     # Read in emptyroom file
     raw_emptyroom = read_raw_bids(
-        bids_path=param["emptyroom_path"], 
+        bids_path=S['participant']['emptyroom_path'], 
         extra_params=dict(preload=True))
 
 
 
     # plot PSD
-    if param["load_plot"]:
+    if S['read_data']['plot']:
         _, axes = plt.subplots(2, 1, figsize=(10, 8))
 
         raw.compute_psd(fmin=0.1, fmax=150, picks="mag").plot(
@@ -430,141 +353,19 @@ def read_data(param):
 
 
     # set sampling frequency and line frequency
-    param["sample_rate"] = raw.info["sfreq"]
-    param["line_freq"] = raw.info["line_freq"]
-    if not param["line_freq"]:
-        param["line_freq"] = 60.0
-    print(f"Sampling rate: {param["sample_rate"]} Hz")
+    S['info']['sample_rate'] = raw.info['sfreq']
+    S['info']['line_freq'] = raw.info['line_freq']
+    if not S['info']['line_freq']:
+        S['info']['line_freq'] = 60.0
+    print(f"Sampling rate: {S['info']['sample_rate']} Hz")
 
 
     print("\n---------------------------------------------------\n")
-    return param, raw, raw_emptyroom
+    return S, raw, raw_emptyroom
 
 
 
-def assess_preproc(param, raw, epoch_in=None):
-    # assess preproc ==========================================================================================================
-    print("\n\n\nAssessing preproc ---------------------------------------------------\n")
-
-
-    if epoch_in is None:
-        epochs = mne.Epochs(raw, 
-                    events=None, 
-                    tmin=-.200, tmax=.400, 
-                    baseline=(-.200, 0),
-                    preload=True,
-                    proj=True,
-                    decim=param['epoch_decim'],
-                    ).pick('mag', exclude='bads')
-    else:
-        epochs = epoch_in.copy().pick('mag', exclude='bads').crop(tmin=np.maximum(-.200, epoch_in.tmin),tmax=None).apply_baseline()
-
-    classes_all = ['standard/left', 'standard/right', 'devient/left', 'devient/right']
-    classes_decode = ["standard/right", "devient/right"]
-    classes_title = "right"
-    epochs = epochs.equalize_event_counts(event_ids=classes_all)[0]
-
-
-
-    # plotting ---------------------------------------------------------
-    _, axes = plt.subplot_mosaic([['topo', 'decode_time'],['topo', 'decode_time']],
-                                constrained_layout=True, 
-                                figsize=(12, 6))
-
-
-
-    evk_dict = dict()
-    for cond in epochs.event_id.keys():
-        evk_dict[cond] = epochs[cond].copy().average()
-    
-    mne.viz.plot_compare_evokeds(
-        evk_dict,
-        picks='mag',
-        ci=0.95,
-        colors=dict(standard=0, devient=1),
-        linestyles=dict(left="solid", right="dashed"),
-        time_unit="ms",
-        axes=axes['topo'],
-        show_sensors=False,
-        show=False,
-    );
-    del evk_dict
-
-
-    X = np.concatenate([epochs.get_data(copy=False, item=item) for item in classes_decode])
-    y = np.zeros(len(X))
-    y[len(epochs[classes_decode[0]].get_data()):] = 1  # set classes[1] indices to 1    
-    
-
-    # time-resolved decoding ---------------------------------------------------------
-    embeder = StandardScaler()
-    decoder = LinearSVC(random_state=99, dual='auto', C=.0001, max_iter=100000)
-    # decoder = LogisticRegression(solver="liblinear")
-
-    clf = make_pipeline(embeder, decoder)
-    time_decod = SlidingEstimator(clf, n_jobs=param['n_jobs'], scoring="roc_auc", verbose=True)
-    scores = cross_val_multiscore(time_decod, X, y, cv=ShuffleSplit(param['assess_cv'], test_size=0.2, random_state=99), n_jobs=param['n_jobs'])
-    
-    # Plot
-    axes['decode_time'].plot(epochs.times, np.mean(scores, axis=0), label="score")
-    axes['decode_time'].axhline(0.5, color="k", linestyle="--", label="chance")
-    axes['decode_time'].set_xlabel("Times")
-    axes['decode_time'].set_ylabel("AUC")  # Area Under the Curve
-    axes['decode_time'].legend()
-    axes['decode_time'].axvline(0.0, color="k", linestyle="-")
-    axes['decode_time'].set_title("Sensor space decoding")
-    plt.show()
-
-    # save
-    if param['assess_save']:
-        np.mean(scores, axis=0).tofile(f'decode{param["participant"]}_{param['hfc_order']}.csv', sep = ',')
-
-
-
-
-    # CSP topo ---------------------------------------------------------
-    # # TODO: IF PLOT CSP
-    # csp = CSP(n_components=5, reg=.001, log=True, norm_trace=False)
-    # csp.fit(X, y)
-
-    # # for axis in [param['assess_plot_axes']]:
-    # for axis in ['X', 'Y', 'Z']:
-    #     csp.plot_patterns(epochs.misc_axis(axis).info, ch_type="mag", units=f"Patterns (AU) - {axis}", size=2);
-    
-
-
-
-    # time-varying patterns ---------------------------------------------------------
-    embeder = StandardScaler()
-    decoder = LinearModel(decoder)
-    clf = make_pipeline(embeder, decoder)
-    time_decod = SlidingEstimator(clf, n_jobs=param['n_jobs'], scoring="roc_auc", verbose=True)
-    time_decod.fit(X, y)
-
-    coef = get_coef(time_decod, "patterns_", inverse_transform=True)
-    evoked_time_gen = mne.EvokedArray(coef, epochs.info, tmin=epochs.times[0])
-    
-    joint_kwargs = dict(ts_args=dict(time_unit="s"), topomap_args=dict(time_unit="s"))
-
-    for axis in param['assess_plot_axes']:
-        evoked_time_gen.get_axis(axis).plot_joint(
-            times="peaks", title=f"decode pattern - {classes_title}", **joint_kwargs
-            )
-
-
-
-    # print overall decoding
-    print(f"\n\n\n\n\n\n----------decoding: {100 * scores[:,epochs.time_as_index(0)[0]:].mean():0.4f}% ----------\n")
-
-   
-
-
-
-    del epochs
-
-
-
-def channel_reject(param, raw, raw_emptyroom=None):
+def channel_reject(S, raw, raw_emptyroom=None):
     # channel rejection ==========================================================================================================
     
     
@@ -572,27 +373,27 @@ def channel_reject(param, raw, raw_emptyroom=None):
 
 
     # add known bad channels
-    if len(param["known_bads"]) > 0:
+    if len(S['participant']['known_bads']) > 0:
         print("Adding known bad channels...")
-        raw.info["bads"].extend(param["known_bads"])
-        print("Known bads: ", raw.info["bads"])
+        raw.info['bads'].extend(S['participant']['known_bads'])
+        print("Known bads: ", raw.info['bads'])
 
 
     ransac = False
-    match param["channel_reject_method"]:
+    match S['channel_reject']['method']:
 
         case "osl":
 
             print("Detecting bad channels using OSL")
 
-            if param["channel_reject_filter"]:
+            if S['channel_reject']['filter']:
 
-                raw_filt = raw.copy().filter(l_freq=param["filter_range"][0], h_freq=param["filter_range"][1], method='iir')
+                raw_filt = raw.copy().filter(l_freq=S['temporal_filter']['range'][0], h_freq=S['temporal_filter']['range'][1], method='iir')
 
                 raw_filt = detect_badchannels(raw_filt, "mag", 
                                         ref_meg=None, 
                                         significance_level=0.05, 
-                                        segment_len=round(raw.info["sfreq"]*param["channel_reject_sec"]),
+                                        segment_len=round(raw.info['sfreq']*S['channel_reject']['sec']),
                                         )
                 
                 raw.info['bads'] = raw_filt.info['bads']
@@ -602,7 +403,7 @@ def channel_reject(param, raw, raw_emptyroom=None):
                 raw = detect_badchannels(raw, "mag", 
                                         ref_meg=None, 
                                         significance_level=0.05, 
-                                        segment_len=round(raw.info["sfreq"]*param["channel_reject_sec"]),
+                                        segment_len=round(raw.info['sfreq']*S['channel_reject']['sec']),
                                         )
             
 
@@ -611,7 +412,7 @@ def channel_reject(param, raw, raw_emptyroom=None):
             print("Detecting bad channels using maxwell")
             start_time = time.time()
 
-            if param['chanel_reject_eSSS']:
+            if S['channel_reject']['eSSS']:
 
                 print("-- running eSSS")
                 raw_emptyroom.info['bads'] = raw.info['bads']
@@ -639,14 +440,14 @@ def channel_reject(param, raw, raw_emptyroom=None):
             print('maxwell flat: ', flat_chans)
             raw.info['bads'].extend(flat_chans)
 
-            if param["channel_reject_plot"]: 
+            if S['channel_reject']['plot']: 
                 # Plot noisy channel scores as heatmap
                 plt.figure(figsize=(10, 6))
                 plt.imshow(scores['scores_noisy'], aspect='auto')
                 plt.yticks(range(len(scores['ch_names'])), scores['ch_names'], ha='right')
                 plt.colorbar(label='Score')
                 plt.set_cmap('Reds')
-                plt.clim(np.nanmin(scores["limits_noisy"]), None)
+                plt.clim(np.nanmin(scores['limits_noisy']), None)
                 plt.title('Maxwell Filter Noise Scores by Channel')
                 plt.tight_layout()
                 plt.show()
@@ -665,12 +466,12 @@ def channel_reject(param, raw, raw_emptyroom=None):
             # Create epochs for RANSAC
             epochs_ransac = mne.Epochs(raw, 
                                     events=None, 
-                                    tmin=param["epoch_tmin"], tmax=param["epoch_tmax"], 
+                                    tmin=S['epoch']['tmin'], tmax=S['epoch']['tmax'], 
                                     baseline=None, 
                                     preload=True)
 
             # Fit RANSAC
-            ransac = Ransac(verbose=True, picks='mag', n_jobs=param["n_jobs"], random_state=99)
+            ransac = Ransac(verbose=True, picks='mag', n_jobs=S['general']['n_jobs'], random_state=99)
             ransac = ransac.fit(epochs_ransac)
 
             # Apply RANSAC
@@ -687,24 +488,24 @@ def channel_reject(param, raw, raw_emptyroom=None):
         case _:
             raise Exception("channel reject not recognized")
 
-    print(f"identified {len(raw.info["bads"])} bad channels...")
+    print(f"identified {len(raw.info['bads'])} bad channels...")
     print('bads: ', raw.info['bads'])
 
 
-    if param["channel_reject_plot"]:
+    if S['channel_reject']['plot']:
 
         raw_filt = raw.copy().pick('mag').filter(l_freq=.1, h_freq=150, method='iir')
         raw_filt.plot(block=True, scalings={"mag": 8e-12}, n_channels=32, duration=120)
 
-        raw.info["bads"] = raw_filt.info["bads"] # transfer bads
+        raw.info['bads'] = raw_filt.info['bads'] # transfer bads
         del raw_filt
 
     print("\n---------------------------------------------------\n")
-    return param, raw
+    return S, raw
 
 
 
-def hfc_proj(param,raw):
+def hfc_proj(S,raw):
     # harmonic field correction ==========================================================================================================
     print("\n\n\nHarmonic Field Correction ---------------------------------------------------\n")
 
@@ -713,13 +514,13 @@ def hfc_proj(param,raw):
     raw_pre = raw.copy()
 
     # HFC
-    print(f"computing HFC order {param['hfc_order']}")
-    hfc_proj = mne.preprocessing.compute_proj_hfc(raw.info, order=param['hfc_order'], picks="mag")
+    print(f"computing HFC order {S['HFC']['order']}")
+    hfc_proj = mne.preprocessing.compute_proj_hfc(raw.info, order=S['HFC']['order'], picks="mag")
     raw.add_proj(hfc_proj)
 
 
     # apply HFC    
-    if param['hfc_apply']:
+    if S['HFC']['apply']:
         raw.apply_proj(verbose="error")
         print("applied HFC")
     else:
@@ -731,7 +532,7 @@ def hfc_proj(param,raw):
 
 
     # plot HFC
-    if param["hfc_plot"]:
+    if S['HFC']['plot']:
 
 
         # raw.plot(block=True)
@@ -741,7 +542,7 @@ def hfc_proj(param,raw):
         
         # Plot PSD before HFC
         psd_orig = raw_pre.compute_psd(fmin=0, 
-                                       fmax=2*param["line_freq"], 
+                                       fmax=2*S['info']['line_freq'], 
                                        picks="mag",
                                        n_fft=2000)
         psd_orig.plot(
@@ -753,7 +554,7 @@ def hfc_proj(param,raw):
         
         # Plot PSD after HFC
         psd_hfc = raw.copy().apply_proj(verbose="error").compute_psd(fmin=0, 
-                                                                     fmax=2*param["line_freq"], 
+                                                                     fmax=2*S['info']['line_freq'], 
                                                                      picks="mag",
                                                                      n_fft=2000)
         
@@ -801,17 +602,17 @@ def hfc_proj(param,raw):
 
 
     print("\n---------------------------------------------------\n")
-    return param, raw
+    return S, raw
 
 
 
-def temporal_filter(param, raw):
+def temporal_filter(S, raw):
     # resample & filter ==========================================================================================================
     print("\n\n\nTemporal Filter ---------------------------------------------------\n")
 
 
     # plot before filter
-    if param["filter_plot"]:
+    if S['temporal_filter']['plot']:
         _, axs = plt.subplots(2, 1, figsize=(10, 8))
         raw.compute_psd(fmin=0, 
                         fmax=120,
@@ -823,37 +624,37 @@ def temporal_filter(param, raw):
                             axes = axs[0])
 
     # Notch Filter ---------------------------------------------------------
-    if param['filter_notch_spectrum']:
+    if S['temporal_filter']['notch_spectrum']:
 
         print('\n\nnotch filter: spectrum fit ----------\n')
         raw.notch_filter(freqs=None, 
                          method='spectrum_fit', 
                          filter_length='10s',
-                         n_jobs=param['n_jobs'],
+                         n_jobs=S['general']['n_jobs'],
                          )
         
     else:
 
         print('\n\nnotch filter: traditional method ----------\n')
-        raw.notch_filter(param["line_freq"])
-        if (2*param["line_freq"]) <  (param["filter_range"][1]+10):
-            for ff in range(2, int(1+np.ceil((param["filter_range"][1] + 10) / param["line_freq"]))):
-                print(f"\n\nnotch filter: {param["line_freq"]*ff} Hz ----------\n")
-                raw.notch_filter(param["line_freq"]*ff)
+        raw.notch_filter(S['info']['line_freq'])
+        if (2*S['info']['line_freq']) <  (S['temporal_filter']['range'][1]+10):
+            for ff in range(2, int(1+np.ceil((S['temporal_filter']['range'][1] + 10) / S['info']['line_freq']))):
+                print(f"\n\nnotch filter: {S['info']['line_freq']*ff} Hz ----------\n")
+                raw.notch_filter(S['info']['line_freq']*ff)
 
 
     # seperately high-pass filter then low-pass filter ---------------------------------------------------------
-    raw.filter(l_freq=param["filter_range"][0], 
+    raw.filter(l_freq=S['temporal_filter']['range'][0], 
                h_freq=None, 
-               fir_window=param["filter_window"],
+               fir_window=S['temporal_filter']['window'],
                ).filter(l_freq=None, 
-               h_freq=param["filter_range"][1], 
-               fir_window=param["filter_window"],
+               h_freq=S['temporal_filter']['range'][1], 
+               fir_window=S['temporal_filter']['window'],
                )
 
 
     # plot after filter
-    if param["filter_plot"]:
+    if S['temporal_filter']['plot']:
 
         spec_filt = raw.compute_psd(fmin=0, 
                                     fmax=120, 
@@ -868,25 +669,26 @@ def temporal_filter(param, raw):
         plt.show()
 
         # plot filtered topomaps
-        for axis in param['filter_plot_axis']:
+        if S['temporal_filter']['plot_topos']:
+            for axis in S['temporal_filter']['plot_axis']:
 
-            spec_filt.get_axis(axis).plot_topo(show=True)
-
-
-
-            spec_filt.get_axis(axis).plot_topomap(bands=param["filter_plot_bands_trouble"], 
-                                                            ch_type='mag', 
-                                                            normalize=True, 
-                                                            show_names=True,
-                                                            show=True)
+                spec_filt.get_axis(axis).plot_topo(show=True)
 
 
-            spec_filt.get_axis(axis).plot_topomap(bands=param["filter_plot_bands"], 
-                                                  ch_type='mag', 
-                                                  normalize=True, 
-                                                  show_names=True,
-                                                  show=True)
-        
+
+                spec_filt.get_axis(axis).plot_topomap(bands=S['temporal_filter']['plot_bands_trouble'], 
+                                                                ch_type='mag', 
+                                                                normalize=True, 
+                                                                show_names=True,
+                                                                show=True)
+
+
+                spec_filt.get_axis(axis).plot_topomap(bands=S['temporal_filter']['plot_bands'], 
+                                                    ch_type='mag', 
+                                                    normalize=True, 
+                                                    show_names=True,
+                                                    show=True)
+            
         del spec_filt
 
         
@@ -896,11 +698,11 @@ def temporal_filter(param, raw):
     gc.collect()
 
     print("\n---------------------------------------------------\n")
-    return param, raw
+    return S, raw
 
 
 
-def segment_reject(param,raw,metric='std'):
+def segment_reject(S,raw,metric='std'):
     # reject continious segments ==========================================================================================================
     print('\n\nsegment rejection ---------------------------------------------------\n')
 
@@ -911,7 +713,7 @@ def segment_reject(param,raw,metric='std'):
             raw,
             picks='mag',
             detect_zeros=False,
-            segment_len=round(raw.info["sfreq"]*1.0),
+            segment_len=round(raw.info['sfreq']*1.0),
             significance_level=0.05,
             metric='kurtosis',
             channel_wise = False,
@@ -926,9 +728,9 @@ def segment_reject(param,raw,metric='std'):
                 metric="std",
                 detect_zeros=False,
                 channel_wise=False,
-                segment_len=round(raw.info["sfreq"]*param["segment_reject_sec"]),
-                channel_threshold=param["segment_reject_thresh"],
-                significance_level=param["segment_reject_thresh"],
+                segment_len=round(raw.info['sfreq']*S['segment_reject']['sec']),
+                channel_threshold=S['segment_reject']['thresh'],
+                significance_level=S['segment_reject']['thresh'],
                 )
         
         # raw = detect_badsegments(
@@ -939,50 +741,51 @@ def segment_reject(param,raw,metric='std'):
         #         mode="diff",
         #         detect_zeros=False,
         #         channel_wise=False,
-        #         segment_len=round(raw.info["sfreq"]*param["segment_reject_sec"]),
-        #         channel_threshold=param["segment_reject_thresh"],
-        #         significance_level=param["segment_reject_thresh"],
+        #         segment_len=round(raw.info['sfreq']*S['segment_reject_sec']),
+        #         channel_threshold=S['segment_reject_thresh'],
+        #         significance_level=S['segment_reject_thresh'],
         #         )
     
-    if param["segment_reject_plot"]:
+    if S['segment_reject']['plot']:
         raw.plot(block=True)
 
 
     print("\n---------------------------------------------------\n")
-    return param, raw
+    return S, raw
 
 
 
-def fit_ica(param, raw):
+def fit_ica(S, raw):
     # ICA ==========================================================================================================
     print("\n\n\nICA ---------------------------------------------------\n")
 
-    if os.path.isfile(param["ica_fname"]):
-
-        print(f"loading ICA from {param["ica_fname"]}")
-        ica = mne.preprocessing.read_ica(param["ica_fname"])
-
+    # filter for ICA
+    if S['temporal_filter']['range'][0] < 1.0:
+        raw_ica = raw.copy().filter(l_freq=1, h_freq=None, fir_window=S['temporal_filter']['window']).pick(picks="meg", exclude=raw.info['bads'])
     else:
+        raw_ica = raw.copy().pick(picks="meg", exclude=raw.info['bads'])
+
+    # load for run
+    if S['ICA']['load'] and os.path.isfile(S['general']['ica_fname']):
+
+        print(f"loading ICA from {S['general']['ica_fname']}")
+        ica = mne.preprocessing.read_ica(S['general']['ica_fname'])
+
+    else:        
 
         print("Fitting ICA...")
-        if param["filter_range"][0] < 1.0:
-            raw_ica = raw.copy().filter(l_freq=1, h_freq=None, fir_window=param["filter_window"]).pick(picks="meg", exclude=raw.info["bads"])
-        else:
-            raw_ica = raw.copy().pick(picks="meg", exclude=raw.info["bads"])
-        
-
-        ica = mne.preprocessing.ICA(n_components=param["ica_n_components"], 
+        ica = mne.preprocessing.ICA(n_components=S['ICA']['n_components'], 
                                     max_iter=1000,
                                     random_state=99, 
-                                    method=param["ica_method"],
-                                    fit_params=param["ica_params"],
+                                    method=S['ICA']['method'],
+                                    fit_params=S['ICA']['params'],
                                     )
         
 
         # fit ICA ---------------------------------------------------------
         ica.fit(raw_ica, 
-                decim=param['ica_decim'],
-                tstep=param["ica_tstep"],
+                decim=S['ICA']['decim'],
+                tstep=S['ICA']['tstep'],
                 reject_by_annotation=True,
                 )
         
@@ -996,8 +799,8 @@ def fit_ica(param, raw):
 
 
             
-    # auto-select
-    if param['ica_auto_all']:
+    # auto-label
+    if S['ICA']['auto_label']:
         print('\nfind bad muscles components ---- \n')
         ica.exclude.extend(ica.find_bads_muscle(raw_ica)[0])
         print('\nfind bad ECG components ---- \n')
@@ -1010,7 +813,7 @@ def fit_ica(param, raw):
     # plot ICA ---------------------------------------------------------
 
     # plot ICA components
-    for axis in param["ica_plot_axes"]:
+    for axis in S['ICA']['plot_axes']:
         
         # plot all components
         plot_ica_axis(ica, raw_ica, axis=axis)
@@ -1021,30 +824,30 @@ def fit_ica(param, raw):
     
     del raw_ica
 
-    if param["ica_save"]:
-        print(f"saving ICA to {param["ica_fname"]}")
-        ica.save(param["ica_fname"])
+    if S['ICA']['save']:
+        print(f"saving ICA to {S['general']['ica_fname']}")
+        ica.save(S['general']['ica_fname'])
     else:
         print("not saving ICA")
 
 
     print("\n---------------------------------------------------\n")
 
-    return param, ica
+    return S, ica
 
 
 
-def create_epoch(param, raw, ica):
+def create_epoch(S, raw, ica):
     # create standard & ICA epochs ==========================================================================================================
     print("\n\n\nEpoch ---------------------------------------------------\n")
 
 
     epochs = mne.Epochs(raw, 
                 events=None, 
-                tmin=param["epoch_tmin"], tmax=param["epoch_tmax"], 
+                tmin=S['epoch']['tmin'], tmax=S['epoch']['tmax'], 
                 baseline=None, # don't baseline before ICA
                 preload=True,
-                decim=param['epoch_decim'],
+                decim=S['epoch']['decim'],
                 )
    
     if ica is not None:
@@ -1053,18 +856,18 @@ def create_epoch(param, raw, ica):
 
     print('\nEpoch info ----------\n', epochs, '\n', epochs.info, '\n')
     print("\n---------------------------------------------------\n")
-    return param, epochs
+    return S, epochs
 
 
 
-def reject_epoch(param, epochs):
+def reject_epoch(S, epochs):
 
     # Epoch rejection 1 ==========================================================================================================
     print("\n\n\nEpoch rejection ---------------------------------------------------\n")
 
 
     # detect bad epochs
-    match param["epoch_reject_method"]:
+    match S['epoch_reject']['method']:
 
         case "osl":
             print("Detecting bad epochs using OSL")
@@ -1080,9 +883,9 @@ def reject_epoch(param, epochs):
             # fit autoreject
             epochs_ar = epochs.copy().pick("mag")
 
-            ar = AutoReject(n_interpolate=param["epoch_reject_ar-interp"], random_state=99, 
+            ar = AutoReject(n_interpolate=S['epoch_reject']['ar-interp'], random_state=99, 
                             picks="mag",
-                            n_jobs=param['n_jobs'], verbose=True)
+                            n_jobs=S['general']['n_jobs'], verbose=True)
             ar.fit(epochs_ar)
             
             # remove rejected epochs
@@ -1102,16 +905,16 @@ def reject_epoch(param, epochs):
 
 
     print("\n---------------------------------------------------\n")
-    return param, epochs
+    return S, epochs
 
 
 
-def save_preproc(param, epochs):
+def save_preproc(S, epochs):
     # save preproc data ==========================================================================================================
     print("\n\n\nSaving preproc data ---------------------------------------------------\n")
 
-    print(f"saving preproc data to {param["preproc_fname"]}")
-    epochs.save(param["preproc_fname"], overwrite=True)
+    print(f"saving preproc data to {S['general']['preproc_fname']}")
+    epochs.save(S['general']['preproc_fname'], overwrite=True)
 
 
    
@@ -1119,21 +922,22 @@ def save_preproc(param, epochs):
 
 
 
-def save_params(param):
+def save_params(S):
     # save preproc data ==========================================================================================================
     print("\n\n\nSaving fitting parameters ---------------------------------------------------\n")
 
     # Save parameters to json
-    print(f"saving parameters to {param["param_fname"]}")
+    print(f"saving parameters to {S['general']['param_fname']}")
 
     # Convert any non-serializable objects to strings
-    param_save = param.copy()
-    for key, value in param_save.items():
-        if not isinstance(value, (str, int, float, bool, list, dict, type(None))):
-            param_save[key] = str(value)
+    param_save = S.copy()
+    for section in S.keys():
+        for key, value in param_save[section].items():
+            if not isinstance(value, (str, int, float, bool, list, dict, type(None))):
+                param_save[section][key] = str(value)
 
     # Save to json
-    with open(param["param_fname"], 'w') as f:
+    with open(S['general']['param_fname'], 'w') as f:
         json.dump(param_save, f, indent=4)
 
 
@@ -1141,13 +945,13 @@ def save_params(param):
 
 
 
-def save_report(param, raw, raw_emptyroom, epochs, ica):
+def save_report(S, raw, raw_emptyroom, epochs, ica):
     # save report ==========================================================================================================
     print("\n\n\nSaving report ---------------------------------------------------\n")
 
     report = mne.Report(verbose=True,
-                        info_fname=param["preproc_fname"],
-                        subject=f"{param["participant"]:03}",
+                        info_fname=S['general']['preproc_fname'],
+                        subject=f"{S['participant']['id']:03}",
                         title="Preprocessing Report",
                         )
     
@@ -1178,7 +982,7 @@ def save_report(param, raw, raw_emptyroom, epochs, ica):
     report.add_ica(ica.get_axis("Z"),
                     title="ICA (Z)",
                     inst=epochs,
-                    n_jobs=param["n_jobs"],
+                    n_jobs=S['general']['n_jobs'],
                     )
     
     # epochs
@@ -1188,8 +992,8 @@ def save_report(param, raw, raw_emptyroom, epochs, ica):
 
 
     # save report
-    print(f"saving report to {param["report_fname"]}")
-    report.save(param["report_fname"], overwrite=True)
+    print(f"saving report to {S['general']['report_fname']}")
+    report.save(S['general']['report_fname'], overwrite=True)
 
 
                       
@@ -1213,26 +1017,25 @@ def save_report(param, raw, raw_emptyroom, epochs, ica):
 # %% run preproc ==========================================================================================================
 
 
-def run_preproc(participant_config="", preproc_config=""):
+def run_preproc(config_path=""):
 
     # %% init ==========================================================================================================
 
     # set params ---------------------------------------------------------
-    param = dict()
-    param = set_participant_params(param, participant_config)
-    param = set_preproc_params(param, preproc_config)
-    param = make_paths(param)
+    S = dict()
+    S = set_preproc_params(S, config_path)
+    S = make_paths(S)
 
 
     # load data ---------------------------------------------------------
-    param, raw, raw_emptyroom = read_data(param)
+    S, raw, raw_emptyroom = read_data(S)
 
 
     # initial fit ---------------------------------------------------------
-    if param["do_assess"][0]:
-        assess_preproc(param, raw)
+    if S['eval_preproc']['run'][0]:
+        S['eval_preproc']['function'](S, raw)
     else:
-        print("\nno assessment ------------------------------------\n")
+        print("\nno evaluation ------------------------------------\n")
 
 
 
@@ -1240,51 +1043,51 @@ def run_preproc(participant_config="", preproc_config=""):
     
 
     # reject segments ---------------------------------------------------------
-    if param['do_segment_reject']:
-        param, raw = segment_reject(param, raw, metric='kurtosis')
+    if S['segment_reject']['run']:
+        S, raw = segment_reject(S, raw, metric='kurtosis')
     else:
         print("\nno segment rejection ------------------------------------\n")
 
 
 
     # channel rejection ---------------------------------------------------------
-    if param['do_channel_reject']:
-        param, raw = channel_reject(param, raw, raw_emptyroom=raw_emptyroom)
+    if S['channel_reject']['run']:
+        S, raw = channel_reject(S, raw, raw_emptyroom=raw_emptyroom)
     else:
         print("\nno channel rejection ------------------------------------\n")
 
 
     # harmonic field correction ---------------------------------------------------------
-    if param['do_hfc']:
-        param, raw = hfc_proj(param, raw)
+    if S['HFC']['run']:
+        S, raw = hfc_proj(S, raw)
     else:
         print("\nno HFC ------------------------------------\n")
 
 
     # temporal filter ---------------------------------------------------------
-    if param['do_filter']:
-        param, raw = temporal_filter(param, raw)
+    if S['temporal_filter']['run']:
+        S, raw = temporal_filter(S, raw)
     else:
         print("\nno filter ------------------------------------\n")
 
 
     # reject segments ---------------------------------------------------------
-    if param['do_segment_reject']:
-        param, raw = segment_reject(param, raw)
+    if S['segment_reject']['run']:
+        S, raw = segment_reject(S, raw)
     else:
         print("\nno segment rejection ------------------------------------\n")
 
 
     # plot evoked ---------------------------------------------------------
-    if param["do_assess"][1]:
-        assess_preproc(param, raw)
+    if S['eval_preproc']['run'][1]:
+        S['eval_preproc']['function'](S, raw)
     else:
-        print("\nno assessment ------------------------------------\n")
+        print("\nno evaluation ------------------------------------\n")
 
 
     # ICA ----------------------------------------------------------------
-    if param["do_ica"]:
-        param, ica = fit_ica(param, raw)
+    if S['ICA']['run']:
+        S, ica = fit_ica(S, raw)
     else:
         print("\nno ICA ------------------------------------\n")
         ica = None
@@ -1294,21 +1097,21 @@ def run_preproc(participant_config="", preproc_config=""):
     # %% epoch  ==========================================================================================================
     
     # create epochs ---------------------------------------------------------
-    param, epochs = create_epoch(param, raw, ica)
+    S, epochs = create_epoch(S, raw, ica)
 
 
     # reject epochs ---------------------------------------------------------
-    if param["do_epoch_reject"]:
-        param, epochs = reject_epoch(param, epochs)
+    if S['epoch_reject']['run']:
+        S, epochs = reject_epoch(S, epochs)
     else:
         print("\nno epoch rejection ------------------------------------\n")
 
 
     # plot evoked ---------------------------------------------------------
-    if param["do_assess"][2]:
-        assess_preproc(param, raw, epoch_in=epochs)
+    if S['eval_preproc']['run'][2]:
+        S['eval_preproc']['function'](S, raw)
     else:
-        print("\nno assessment ------------------------------------\n")
+        print("\nno evaluation ------------------------------------\n")
 
 
 
@@ -1316,22 +1119,22 @@ def run_preproc(participant_config="", preproc_config=""):
 
 
     # save preproc data ---------------------------------------------------------
-    if param["save_preproc"]:
-        save_preproc(param, epochs)
+    if S['general']['save_preproc']:
+        save_preproc(S, epochs)
     else:
         print("\nno save ------------------------------------\n")
 
 
     # save parameters ---------------------------------------------------------
-    if param["save_param"]:
-        save_params(param)
+    if S['general']['save_param']:
+        save_params(S)
     else:
         print("\nno save ------------------------------------\n")
 
 
     # save report ---------------------------------------------------------
-    if param["save_report"]:
-        save_report(param, raw, raw_emptyroom, epochs, ica)
+    if S['general']['save_report']:
+        save_report(S, raw, raw_emptyroom, epochs, ica)
     else:
         print("\nno save ------------------------------------\n")
 
@@ -1341,8 +1144,11 @@ def run_preproc(participant_config="", preproc_config=""):
 
 
 
-
 if __name__ == "__main__":
-    run_preproc()
+    if len(sys.argv) > 1:
+        config_path = sys.argv[1]
+    else:
+        config_path = ""
 
-    
+    run_preproc(config_path)
+

@@ -2,6 +2,7 @@
 */.DS_Store
 .vscode
 src/examples
+examples/oddball
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
