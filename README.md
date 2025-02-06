@@ -1,7 +1,7 @@
 # opm-preproc
 OPM preprocessing pipeline built on [mne-python](https://github.com/mne-tools/mne-python) and [osl-ephys](https://github.com/OHBA-analysis/osl-ephys). 
 
-Grateful for advice from [Lukas Rier](https://github.com/LukasRier).
+Grateful for advice and code from [Lukas Rier](https://github.com/LukasRier) and [Robert Seymour](https://github.com/neurofractal).
 
 
 ## Installation
@@ -11,6 +11,10 @@ cd opm-preproc
 conda env create -f environment.yml
 conda activate opm-preproc
 ```
+
+download the (noisy) oddball dataset [here](https://www.dropbox.com/scl/fo/w7zjyajlxgdeh8t7o9ta3/AFIjA0MpV9tJfaztgkJxYdY?rlkey=7sq0eg0hpsonf7jweypf9pekh&dl=0), and add to `examples/oddball`.
+
+
 ## Core Functions
 - `src/opm_format_bids.py`: BIDSify Cerca OPM data, annotating experimental events
 - `src/opm_preproc.py`: run preprocessing pipeline for a single participant

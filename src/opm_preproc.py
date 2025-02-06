@@ -129,7 +129,7 @@ def set_preproc_params(S, config_path=""):
             '29[X]', '29[Y]', '29[Z]',
         ]
         do_BIDS: True
-        data_root: "/Users/hr0283/Projects/opm-preproc/examples/oddball"
+        data_root: "/Users/hr0283/Projects/opm-preproc/examples/oddball/bids"
         data_path:          # set manually if not using BIDS
         emptyroom_path:     # set manually if not using BIDS
 
@@ -197,11 +197,13 @@ def set_preproc_params(S, config_path=""):
     ICA:
         run: True
         plot_axes: ['Z'] 
-        tstep: 1.0
         n_components: 64
         method: "picard"
         params: {"ortho": True, "extended": True}
         decim: 4
+        tstep: 1.0
+        max_iter: 1000
+        random_state: 99
         auto_label: False
         apply: True
         save: False
@@ -672,29 +674,27 @@ def temporal_filter(S, raw):
         if S['temporal_filter']['plot_topos']:
             for axis in S['temporal_filter']['plot_axis']:
 
-                spec_filt.get_axis(axis).plot_topo(show=True)
+                if S['temporal_filter']['plot_bands_trouble']:
+                    spec_filt.get_axis(axis).plot_topomap(bands=S['temporal_filter']['plot_bands_trouble'], 
+                                                                    ch_type='mag', 
+                                                                    normalize=True, 
+                                                                    show_names=True,
+                                                                    show=True)
+                
 
-
-
-                spec_filt.get_axis(axis).plot_topomap(bands=S['temporal_filter']['plot_bands_trouble'], 
-                                                                ch_type='mag', 
-                                                                normalize=True, 
-                                                                show_names=True,
-                                                                show=True)
-
-
-                spec_filt.get_axis(axis).plot_topomap(bands=S['temporal_filter']['plot_bands'], 
-                                                    ch_type='mag', 
-                                                    normalize=True, 
-                                                    show_names=True,
-                                                    show=True)
+                if S['temporal_filter']['plot_bands']:
+                    spec_filt.get_axis(axis).plot_topomap(bands=S['temporal_filter']['plot_bands'], 
+                                                        ch_type='mag', 
+                                                        normalize=True, 
+                                                        show_names=True,
+                                                        show=True)
             
         del spec_filt
 
         
 
 
-    # mop up memeory leak
+    # avoid memeory leak
     gc.collect()
 
     print("\n---------------------------------------------------\n")
@@ -733,18 +733,18 @@ def segment_reject(S,raw,metric='std'):
                 significance_level=S['segment_reject']['thresh'],
                 )
         
-        # raw = detect_badsegments(
-        #         raw,
-        #         picks="mag",
-        #         ref_meg=False,
-        #         metric="std",
-        #         mode="diff",
-        #         detect_zeros=False,
-        #         channel_wise=False,
-        #         segment_len=round(raw.info['sfreq']*S['segment_reject_sec']),
-        #         channel_threshold=S['segment_reject_thresh'],
-        #         significance_level=S['segment_reject_thresh'],
-        #         )
+        raw = detect_badsegments(
+                raw,
+                picks="mag",
+                ref_meg=False,
+                metric="std",
+                mode="diff",
+                detect_zeros=False,
+                channel_wise=False,
+                segment_len=round(raw.info['sfreq']*S['segment_reject']['sec']),
+                channel_threshold=S['segment_reject']['thresh'],
+                significance_level=S['segment_reject']['thresh'],
+                )
     
     if S['segment_reject']['plot']:
         raw.plot(block=True)
@@ -775,8 +775,8 @@ def fit_ica(S, raw):
 
         print("Fitting ICA...")
         ica = mne.preprocessing.ICA(n_components=S['ICA']['n_components'], 
-                                    max_iter=1000,
-                                    random_state=99, 
+                                    max_iter=S['ICA']['max_iter'],
+                                    random_state=S['ICA']['random_state'], 
                                     method=S['ICA']['method'],
                                     fit_params=S['ICA']['params'],
                                     )
