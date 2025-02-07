@@ -38,7 +38,8 @@ from osl.osl_wrappers import (
     drop_bad_epochs,
 )
 
-from plot.plot_ica_axis import plot_ica_axis
+from utils.plot_ica_axis import plot_ica_axis
+from utils.amm import compute_proj_amm
 
 import eval.eval_preproc
 
@@ -129,13 +130,13 @@ def set_preproc_params(S, config_path=""):
             '29[X]', '29[Y]', '29[Z]',
         ]
         do_BIDS: True
-        data_root: "/Users/hr0283/Projects/opm-preproc/examples/oddball/bids"
+        data_root: "/Users/hr0283/Projects/opm-preproc/examples/oddball/bids" # UPDATE THIS TO YOUR PATH
         data_path:          # set manually if not using BIDS
         emptyroom_path:     # set manually if not using BIDS
 
     info:
         sample_rate:
-        line_freq:
+        line_freq: 60.0
 
     general:
         save_name: "test-preproc"
@@ -150,7 +151,7 @@ def set_preproc_params(S, config_path=""):
         plot: False
 
     eval_preproc:
-        run: [False, False, True]
+        run: [False, True, True]
         function: eval.eval_preproc.eval_oddball
         cv: 10
         plot_axes: ['Z']
@@ -167,8 +168,11 @@ def set_preproc_params(S, config_path=""):
 
     HFC:
         run: True
-        plot: False
-        order: 3
+        plot: True
+        amm: True
+        external_order: 5 # use this for standard HFC
+        internal_order: 9
+        corr_lim: .95
         apply: True
 
     temporal_filter:
@@ -516,8 +520,16 @@ def hfc_proj(S,raw):
     raw_pre = raw.copy()
 
     # HFC
-    print(f"computing HFC order {S['HFC']['order']}")
-    hfc_proj = mne.preprocessing.compute_proj_hfc(raw.info, order=S['HFC']['order'], picks="mag")
+    if not S['HFC']['amm']:
+        print(f"computing HFC order {S['HFC']['external_order']}")
+        hfc_proj = mne.preprocessing.compute_proj_hfc(raw.info, order=S['HFC']['external_order'], picks="mag")
+    else:
+        print(f"computing AMM order {S['HFC']['external_order']}, {S['HFC']['internal_order']}")
+        hfc_proj = compute_proj_amm(raw, 
+                                    Lout=S['HFC']['external_order'], 
+                                    Lin=S['HFC']['internal_order'], 
+                                    corr=S['HFC']['corr_lim']
+                                    )
     raw.add_proj(hfc_proj)
 
 
