@@ -1,0 +1,35 @@
+
+dirs:
+        data_dir: "/Users/hr0283/Projects/opm-preproc/examples/oddball/raw"         # UPDATE THIS PATH
+        bids_dir: "/Users/hr0283/Projects/opm-preproc/examples/oddball/bids"        # UPDATE THIS PATH
+        emptyroom_dir: "/Users/hr0283/Projects/opm-preproc/examples/oddball/raw"    # UPDATE THIS PATH
+
+session:
+        ids: [2]
+        experiment: "oddball_pilot"
+        session: "01"
+        run_prefix: [["20241218_153301", "20241218_155254"]]
+        emptyroom_prefix: ["20241218_160936"]
+        tasks: ["oddball", "oddball"]
+
+trigger:
+        stim_id: ["Trigger1[Z]", "Trigger2[Z]"]
+        old_trigger_id: [3, 3]
+        new_trigger_id: [1, 2]
+        event_desc:
+                1: "standard/left"
+                2: "deviant/left"
+                3: "standard/right"
+                4: "deviant/right"
+                900: "BAD boundary"
+                901: "EDGE boundary"
+        event_id:
+                "standard/left": 1
+                "deviant/left": 2
+                "standard/right": 3
+                "deviant/right": 4
+                "BAD boundary": 900
+                "EDGE boundary": 901
+
+recording_info:
+        line_freq: 60.0
