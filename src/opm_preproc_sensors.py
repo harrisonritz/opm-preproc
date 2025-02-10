@@ -16,6 +16,7 @@ import psutil
 import time
 import yaml
 import sys
+from copy import deepcopy
 
 
 # MEG imports ---------------------------------------------------------
@@ -32,7 +33,7 @@ from autoreject import (
 
 
 # local imports ---------------------------------------------------------
-from osl.osl_wrappers import (
+from utils.osl.osl_wrappers import (
     detect_badchannels, 
     detect_badsegments,
     drop_bad_epochs,
@@ -49,7 +50,7 @@ import eval.eval_preproc
 
 # add axis methods to mne classes ==========================================================================================================
 
-def misc_axis(self, axis='Z'):
+def misc_axis(self, axis='Z', sensor_wildcard=lambda axis: f"^..\\[{axis}]$"):
     """Pick sensors axis by setting non-axis channels to 'misc'.
 
     Creates a copy of the data where channels not matching the specified axis 
@@ -59,6 +60,9 @@ def misc_axis(self, axis='Z'):
     ----------
     axis : str
         Sensor axis to keep, must be 'X', 'Y' or 'Z' (default 'Z')
+    
+    sensor_wildcard : callable
+        Function that returns a regular expression pattern for the sensor names
 
     Returns
     -------
@@ -73,8 +77,7 @@ def misc_axis(self, axis='Z'):
     Harrison Ritz, 2025
     """
    
-
-    axis_picks = mne.pick_channels_regexp(self.info['ch_names'], f"^..\\[{axis}]$")
+    axis_picks = mne.pick_channels_regexp(self.info['ch_names'], sensor_wildcard(axis))
 
     # Create a mask for non-matching columns
     non_axis_picks = np.ones(self.info['nchan'], dtype=bool)
@@ -92,14 +95,32 @@ def misc_axis(self, axis='Z'):
 mne.preprocessing.ICA.get_axis = misc_axis
 mne.time_frequency.Spectrum.get_axis = misc_axis
 
-def pick_axis(inst, axis='Z'): 
-    return mne.pick_channels_regexp(inst.info['ch_names'], regexp=f"^..\\[{axis}]$")
+
+def pick_axis(inst, axis='Z', sensor_wildcard=lambda axis: f"^..\\[{axis}]$"):
+    """Pick sensors axis based on regular expression pattern.
+
+    Parameters
+    ----------
+    inst : mne.io.Raw | mne.Epochs
+        The MNE object to pick channels from.
+    axis : str
+        Sensor axis to keep, must be 'X', 'Y' or 'Z' (default 'Z')
+    sensor_wildcard : callable
+        Function that returns a regular expression pattern for the sensor names
+
+    Returns
+    -------
+    List[int]
+        The indices of the picked channels.
+    """
+    return mne.pick_channels_regexp(inst.info['ch_names'], regexp=sensor_wildcard(axis))
 
 
 
 
 
 def print_memory_usage():
+    """Print the memory usage of the current process in MB."""
     process = psutil.Process(os.getpid())
     print(f"Memory usage: {process.memory_info().rss / 1024 / 1024} MB")
 
@@ -116,7 +137,7 @@ def set_preproc_params(S, config_path=""):
     # set-up configuration ==========================================================================================================
     print("\n\n\nloading configuration ---------------------------------------------------\n")
 
-    # baseline configuration (set for oddball example)
+    # baseline configuration (set for oddball example) ---------------------------------------------------------
     base_config = """
     participant:
         id: 2
@@ -137,6 +158,7 @@ def set_preproc_params(S, config_path=""):
     info:
         sample_rate:
         line_freq: 60.0
+        sensor_wildcard: '^..\\[{axis}]$'
 
     general:
         save_name: "test-preproc"
@@ -151,7 +173,7 @@ def set_preproc_params(S, config_path=""):
         plot: False
 
     eval_preproc:
-        run: [False, True, True]
+        run: [False, False, True]
         function: eval.eval_preproc.eval_oddball
         cv: 10
         plot_axes: ['Z']
@@ -170,14 +192,14 @@ def set_preproc_params(S, config_path=""):
         run: True
         plot: True
         amm: True
-        external_order: 5 # use this for standard HFC
+        external_order: 6 # use this for standard HFC
         internal_order: 9
         corr_lim: .95
         apply: True
 
     temporal_filter:
         run: True
-        plot: False
+        plot: True
         plot_topos: False
         plot_bands: {
             'Delta (0-4 Hz)': [0, 4], 
@@ -224,33 +246,47 @@ def set_preproc_params(S, config_path=""):
         reject_plot: False
         method: 'osl'
         ar-interp: [0, 1, 2, 3]
-    """
 
-    # Load config file
+    """
+    
+
+
+    # Load config file  ---------------------------------------------------------
     S = yaml.safe_load(base_config)
     if config_path:
         print(f"\n\nloading config: {config_path}\n")
+        
         with open(config_path, 'r') as stream:
             proc = yaml.safe_load(stream)
+
         S.update(proc)
         S['participant']['config_path'] = config_path
 
-    # Adjust general parameters if needed
+    # Evaluate sensor wildcard ---------------------------------------------------------
+    wildcard = S['info']['sensor_wildcard'] 
+    S['info']['sensor_wildcard'] = lambda axis: wildcard.format(axis=axis)
+
+    # Adjust general parameters if needed ---------------------------------------------------------
     if S['general']['speed_run']:
         print('\nSPEED RUN ========================================== \n')
         S['HFC']['plot'] = False
+        S['HFC']['amm'] = False
         S['temporal_filter']['plot'] = False
+        S['temporal_filter']['notch_spectrum'] = False
         S['epoch']['plot'] = False
         S['epoch_reject']['plot'] = False
         S['ICA']['n_components'] = 8
         S['ICA']['save'] = False
         S['ICA']['apply'] = True
         S['ICA']['auto_label'] = False
-        S['ICA']['decim'] = 6
+        S['ICA']['decim'] = 10
+        S['eval_preproc']['run'] = [False, False, False]
     
     print("\nCONFIGURATION:")
     print(S)
     print('\nsave label: ', S['general']['save_label'])
+    print('sensor wildcard: ', S['info']['sensor_wildcard']('<axis>'))
+
     if any(S['eval_preproc']):
         print(f"custom eval function: {S['eval_preproc']['function']}\n")
 
@@ -687,19 +723,21 @@ def temporal_filter(S, raw):
             for axis in S['temporal_filter']['plot_axis']:
 
                 if S['temporal_filter']['plot_bands_trouble']:
-                    spec_filt.get_axis(axis).plot_topomap(bands=S['temporal_filter']['plot_bands_trouble'], 
-                                                                    ch_type='mag', 
-                                                                    normalize=True, 
-                                                                    show_names=True,
-                                                                    show=True)
+                    spec_filt.get_axis(axis, sensor_wildcard=S['info']['sensor_wildcard']).plot_topomap(
+                         bands=S['temporal_filter']['plot_bands_trouble'],
+                         ch_type='mag',
+                         normalize=True,
+                         show_names=True,
+                         show=True)
                 
 
                 if S['temporal_filter']['plot_bands']:
-                    spec_filt.get_axis(axis).plot_topomap(bands=S['temporal_filter']['plot_bands'], 
-                                                        ch_type='mag', 
-                                                        normalize=True, 
-                                                        show_names=True,
-                                                        show=True)
+                    spec_filt.get_axis(axis, sensor_wildcard=S['info']['sensor_wildcard']).plot_topomap(
+                        bands=S['temporal_filter']['plot_bands'], 
+                        ch_type='mag', 
+                        normalize=True, 
+                        show_names=True,
+                        show=True)
             
         del spec_filt
 
@@ -942,7 +980,7 @@ def save_params(S):
     print(f"saving parameters to {S['general']['param_fname']}")
 
     # Convert any non-serializable objects to strings
-    param_save = S.copy()
+    param_save = deepcopy(S)
     for section in S.keys():
         for key, value in param_save[section].items():
             if not isinstance(value, (str, int, float, bool, list, dict, type(None))):
@@ -951,6 +989,8 @@ def save_params(S):
     # Save to json
     with open(S['general']['param_fname'], 'w') as f:
         json.dump(param_save, f, indent=4)
+
+    del param_save
 
 
     print("\n---------------------------------------------------\n")
@@ -991,7 +1031,7 @@ def save_report(S, raw, raw_emptyroom, epochs, ica):
     #                  )
     
     # ICA
-    report.add_ica(ica.get_axis("Z"),
+    report.add_ica(ica.get_axis("Z", sensor_wildcard=S['info']['sensor_wildcard']),
                     title="ICA (Z)",
                     inst=epochs,
                     n_jobs=S['general']['n_jobs'],
@@ -1041,7 +1081,7 @@ def run_preproc(config_path=""):
 
     # load data ---------------------------------------------------------
     S, raw, raw_emptyroom = read_data(S)
-
+    
 
     # initial fit ---------------------------------------------------------
     if S['eval_preproc']['run'][0]:
@@ -1119,7 +1159,7 @@ def run_preproc(config_path=""):
         print("\nno epoch rejection ------------------------------------\n")
 
 
-    # plot evoked ---------------------------------------------------------
+    # evaluate preproc ---------------------------------------------------------
     if S['eval_preproc']['run'][2]:
         S['eval_preproc']['function'](S, raw)
     else:

@@ -29,7 +29,7 @@ def print_memory_usage():
 
 
 
-def plot_ica_axis(ica, inst, axis="Z",
+def plot_ica_axis(ica, inst, axis="Z", sensor_wildcard=lambda axis: f"^..\\[{axis}]$",
     sensors=True,
     contours=6,
     outlines="head",
@@ -110,7 +110,7 @@ def plot_ica_axis(ica, inst, axis="Z",
     comps = ica.get_components()
     num_comps = ica.get_components().shape[1]
 
-    ch_picks = mne.pick_channels_regexp(ica.info["ch_names"], f'.*\\[{axis}]$')
+    ch_picks = mne.pick_channels_regexp(ica.info["ch_names"], sensor_wildcard(axis))
 
     # find radial channels in ICA instance
     side_l = int(np.ceil(num_comps/5))
@@ -199,7 +199,7 @@ def plot_ica_axis(ica, inst, axis="Z",
                 if label.startswith("ICA"):
                     ic = int(label.split(" ")[0][-3:])
 
-                    ica.get_axis(axis).plot_properties(
+                    ica.get_axis(axis, sensor_wildcard=sensor_wildcard).plot_properties(
                         inst,
                         picks=ic,
                         show=True,
