@@ -48,13 +48,14 @@ This allows you use a similar preprocessing pipeline across multiple participant
 - `src/utils/plot_ica_axis.py`: version of MNE's ICA GUI adapted for OPM (handling spatially-overlapping sensors)
 
 ## Pipeline Steps
-1. reject channels [osl]
-3. harmonic field correction
-5. temporal filter
-6. continuous segment reject [osl]
-7. fit ICA
-8. epoch, apply ICA, and resample
-9. reject epochs [osl]
+1. continuous segment reject (kurtosis)
+2. channel reject
+3. harmonic field correction / AMM
+4. temporal filter (notch/spectrum, bandpass)
+5. continuous segment reject (std)
+6. fit ICA
+7. epoch, apply ICA, and resample
+8. epoch reject
 
 ## todo
-- source reconstruction
+- coregistration & source reconstruction
