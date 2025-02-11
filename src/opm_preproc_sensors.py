@@ -560,7 +560,7 @@ def hfc_proj(cfg,raw):
         print(f"computing HFC order {cfg['HFC']['external_order']}")
         hfc_proj = mne.preprocessing.compute_proj_hfc(raw.info, order=cfg['HFC']['external_order'], picks="mag")
     else:
-        print(f"computing AMM order {cfg['HFC']['external_order']}, {cfg['HFC']['internal_order']}")
+        print(f"computing AMM (external: {cfg['HFC']['external_order']}, internal: {cfg['HFC']['internal_order']})")
         hfc_proj = compute_proj_amm(raw, 
                                     Lout=cfg['HFC']['external_order'], 
                                     Lin=cfg['HFC']['internal_order'], 
@@ -783,18 +783,18 @@ def segment_reject(cfg,raw,metric='std'):
                 significance_level=cfg['segment_reject']['thresh'],
                 )
         
-        raw = detect_badsegments(
-                raw,
-                picks="mag",
-                ref_meg=False,
-                metric="std",
-                mode="diff",
-                detect_zeros=False,
-                channel_wise=False,
-                segment_len=round(raw.info['sfreq']*cfg['segment_reject']['sec']),
-                channel_threshold=cfg['segment_reject']['thresh'],
-                significance_level=cfg['segment_reject']['thresh'],
-                )
+        # raw = detect_badsegments(
+        #         raw,
+        #         picks="mag",
+        #         ref_meg=False,
+        #         metric="std",
+        #         mode="diff",
+        #         detect_zeros=False,
+        #         channel_wise=False,
+        #         segment_len=round(raw.info['sfreq']*cfg['segment_reject']['sec']),
+        #         channel_threshold=cfg['segment_reject']['thresh'],
+        #         significance_level=cfg['segment_reject']['thresh'],
+        #         )
     
     if cfg['segment_reject']['plot']:
         raw.plot(block=True)
