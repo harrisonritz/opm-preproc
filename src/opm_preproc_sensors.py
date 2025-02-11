@@ -132,7 +132,7 @@ def print_memory_usage():
 
 
 
-def set_preproc_params(S, config_path=""):
+def set_preproc_params(cfg, config_path=""):
 
     # set-up configuration ==========================================================================================================
     print("\n\n\nloading configuration ---------------------------------------------------\n")
@@ -252,127 +252,127 @@ def set_preproc_params(S, config_path=""):
 
 
     # Load config file  ---------------------------------------------------------
-    S = yaml.safe_load(base_config)
+    cfg = yaml.safe_load(base_config)
     if config_path:
         print(f"\n\nloading config: {config_path}\n")
         
         with open(config_path, 'r') as stream:
             proc = yaml.safe_load(stream)
 
-        S.update(proc)
-        S['participant']['config_path'] = config_path
+        cfg.update(proc)
+        cfg['participant']['config_path'] = config_path
 
     # Evaluate sensor wildcard ---------------------------------------------------------
-    wildcard = S['info']['sensor_wildcard'] 
-    S['info']['sensor_wildcard'] = lambda axis: wildcard.format(axis=axis)
+    wildcard = cfg['info']['sensor_wildcard'] 
+    cfg['info']['sensor_wildcard'] = lambda axis: wildcard.format(axis=axis)
 
     # Adjust general parameters if needed ---------------------------------------------------------
-    if S['general']['speed_run']:
+    if cfg['general']['speed_run']:
         print('\nSPEED RUN ========================================== \n')
-        S['HFC']['plot'] = False
-        S['HFC']['amm'] = False
-        S['temporal_filter']['plot'] = False
-        S['temporal_filter']['notch_spectrum'] = False
-        S['epoch']['plot'] = False
-        S['epoch_reject']['plot'] = False
-        S['ICA']['n_components'] = 8
-        S['ICA']['save'] = False
-        S['ICA']['apply'] = True
-        S['ICA']['auto_label'] = False
-        S['ICA']['decim'] = 10
-        S['eval_preproc']['run'] = [False, False, False]
+        cfg['HFC']['plot'] = False
+        cfg['HFC']['amm'] = False
+        cfg['temporal_filter']['plot'] = False
+        cfg['temporal_filter']['notch_spectrum'] = False
+        cfg['epoch']['plot'] = False
+        cfg['epoch_reject']['plot'] = False
+        cfg['ICA']['n_components'] = 8
+        cfg['ICA']['save'] = False
+        cfg['ICA']['apply'] = True
+        cfg['ICA']['auto_label'] = False
+        cfg['ICA']['decim'] = 10
+        cfg['eval_preproc']['run'] = [False, False, False]
     
     print("\nCONFIGURATION:")
-    print(S)
-    print('\nsave label: ', S['general']['save_label'])
-    print('sensor wildcard: ', S['info']['sensor_wildcard']('<axis>'))
+    print(cfg)
+    print('\nsave label: ', cfg['general']['save_label'])
+    print('sensor wildcard: ', cfg['info']['sensor_wildcard']('<axis>'))
 
-    if any(S['eval_preproc']):
-        print(f"custom eval function: {S['eval_preproc']['function']}\n")
+    if any(cfg['eval_preproc']):
+        print(f"custom eval function: {cfg['eval_preproc']['function']}\n")
 
-        module_name, func_name = S['eval_preproc']['function'].rsplit('.', 1)
+        module_name, func_name = cfg['eval_preproc']['function'].rsplit('.', 1)
         mod = __import__(module_name, fromlist=[func_name])
-        S['eval_preproc']['function'] = getattr(mod, func_name)
+        cfg['eval_preproc']['function'] = getattr(mod, func_name)
        
 
 
     print("\n---------------------------------------------------\n")
-    return S
+    return cfg
     
 
 
-def make_paths(S):
+def make_paths(cfg):
 
     print("\n\n\nMaking paths ---------------------------------------------------\n")
-    if S['participant']['do_BIDS']:
+    if cfg['participant']['do_BIDS']:
         bids_path = BIDSPath(
-            subject = f"{S['participant']['id']:03}", 
-            session = f"{S['participant']['session']:02}", 
-            task = S['participant']['task'],
-            run = f"{S['participant']['run']:02}",
-            datatype = S['participant']['datatype'], 
-            root = S['participant']['data_root']
+            subject = f"{cfg['participant']['id']:03}", 
+            session = f"{cfg['participant']['session']:02}", 
+            task = cfg['participant']['task'],
+            run = f"{cfg['participant']['run']:02}",
+            datatype = cfg['participant']['datatype'], 
+            root = cfg['participant']['data_root']
         )
-        S['participant']['data_path'] = bids_path
+        cfg['participant']['data_path'] = bids_path
 
         emptyroom_path = BIDSPath(
-            subject = f"{S['participant']['id']:03}", 
-            session = f"{S['participant']['session']:02}", 
+            subject = f"{cfg['participant']['id']:03}", 
+            session = f"{cfg['participant']['session']:02}", 
             task = 'emptyroom',
-            run = f"{S['participant']['run']:02}",
-            datatype = S['participant']['datatype'], 
-            root = S['participant']['data_root']
+            run = f"{cfg['participant']['run']:02}",
+            datatype = cfg['participant']['datatype'], 
+            root = cfg['participant']['data_root']
         )
-        S['participant']['emptyroom_path'] = emptyroom_path
+        cfg['participant']['emptyroom_path'] = emptyroom_path
 
-    elif S['participant']['data_path']:
+    elif cfg['participant']['data_path']:
         print('BIDS path not set. Using manual path.')
     else:
         warnings.warn("BIDS path not set. Add code here to set the file path manually.")
 
    
 
-    ica_dir = os.path.join(S['participant']['data_root'], "derivatives", "ICA")
+    ica_dir = os.path.join(cfg['participant']['data_root'], "derivatives", "ICA")
     os.makedirs(ica_dir, exist_ok=True)
-    S['general']['ica_fname'] = os.path.join(ica_dir, f"{bids_path.basename}-ica.fif")
+    cfg['general']['ica_fname'] = os.path.join(ica_dir, f"{bids_path.basename}-ica.fif")
 
-    preproc_dir = os.path.join(S['participant']['data_root'], "derivatives", "preproc")
+    preproc_dir = os.path.join(cfg['participant']['data_root'], "derivatives", "preproc")
     os.makedirs(preproc_dir, exist_ok=True)
-    S['general']['preproc_fname'] = os.path.join(preproc_dir, f"{bids_path.basename}_{S['general']['save_label']}_preproc_epo.fif")
-    S['general']['param_fname'] = os.path.join(preproc_dir, f"{bids_path.basename}_{S['general']['save_label']}_preproc_params.json")
+    cfg['general']['preproc_fname'] = os.path.join(preproc_dir, f"{bids_path.basename}_{cfg['general']['save_label']}_preproc_epo.fif")
+    cfg['general']['param_fname'] = os.path.join(preproc_dir, f"{bids_path.basename}_{cfg['general']['save_label']}_preproc_params.json")
 
-    report_dir = os.path.join(S['participant']['data_root'], "derivatives", "report")
+    report_dir = os.path.join(cfg['participant']['data_root'], "derivatives", "report")
     os.makedirs(report_dir, exist_ok=True)
-    S['general']['report_fname'] = os.path.join(report_dir, f"{bids_path.basename}_{S['general']['save_label']}_preproc_report.html")
+    cfg['general']['report_fname'] = os.path.join(report_dir, f"{bids_path.basename}_{cfg['general']['save_label']}_preproc_report.html")
 
     print("\n---------------------------------------------------\n")
-    return S
+    return cfg
 
 
 
-def read_data(S):
+def read_data(cfg):
 
     # read-in data ==========================================================================================================
     print("\n\n\nReading in data ---------------------------------------------------\n")
-    print(f"Participant: {S['participant']['id']}, Session: {S['participant']['session']}, Run: {S['participant']['run']}, Task: {S['participant']['task']}, Datatype: {S['participant']['datatype']}")
-    print(f"data path: {S['participant']['data_path']}")
+    print(f"Participant: {cfg['participant']['id']}, Session: {cfg['participant']['session']}, Run: {cfg['participant']['run']}, Task: {cfg['participant']['task']}, Datatype: {cfg['participant']['datatype']}")
+    print(f"data path: {cfg['participant']['data_path']}")
 
 
     # Read in raw file
     raw = read_raw_bids(
-        bids_path=S['participant']['data_path'], 
+        bids_path=cfg['participant']['data_path'], 
         extra_params=dict(preload=True))
 
 
     # Read in emptyroom file
     raw_emptyroom = read_raw_bids(
-        bids_path=S['participant']['emptyroom_path'], 
+        bids_path=cfg['participant']['emptyroom_path'], 
         extra_params=dict(preload=True))
 
 
 
     # plot PSD
-    if S['read_data']['plot']:
+    if cfg['read_data']['plot']:
         _, axes = plt.subplots(2, 1, figsize=(10, 8))
 
         raw.compute_psd(fmin=0.1, fmax=150, picks="mag").plot(
@@ -395,19 +395,19 @@ def read_data(S):
 
 
     # set sampling frequency and line frequency
-    S['info']['sample_rate'] = raw.info['sfreq']
-    S['info']['line_freq'] = raw.info['line_freq']
-    if not S['info']['line_freq']:
-        S['info']['line_freq'] = 60.0
-    print(f"Sampling rate: {S['info']['sample_rate']} Hz")
+    cfg['info']['sample_rate'] = raw.info['sfreq']
+    cfg['info']['line_freq'] = raw.info['line_freq']
+    if not cfg['info']['line_freq']:
+        cfg['info']['line_freq'] = 60.0
+    print(f"Sampling rate: {cfg['info']['sample_rate']} Hz")
 
 
     print("\n---------------------------------------------------\n")
-    return S, raw, raw_emptyroom
+    return cfg, raw, raw_emptyroom
 
 
 
-def channel_reject(S, raw, raw_emptyroom=None):
+def channel_reject(cfg, raw, raw_emptyroom=None):
     # channel rejection ==========================================================================================================
     
     
@@ -415,27 +415,27 @@ def channel_reject(S, raw, raw_emptyroom=None):
 
 
     # add known bad channels
-    if len(S['participant']['known_bads']) > 0:
+    if len(cfg['participant']['known_bads']) > 0:
         print("Adding known bad channels...")
-        raw.info['bads'].extend(S['participant']['known_bads'])
+        raw.info['bads'].extend(cfg['participant']['known_bads'])
         print("Known bads: ", raw.info['bads'])
 
 
     ransac = False
-    match S['channel_reject']['method']:
+    match cfg['channel_reject']['method']:
 
         case "osl":
 
             print("Detecting bad channels using OSL")
 
-            if S['channel_reject']['filter']:
+            if cfg['channel_reject']['filter']:
 
-                raw_filt = raw.copy().filter(l_freq=S['temporal_filter']['range'][0], h_freq=S['temporal_filter']['range'][1], method='iir')
+                raw_filt = raw.copy().filter(l_freq=cfg['temporal_filter']['range'][0], h_freq=cfg['temporal_filter']['range'][1], method='iir')
 
                 raw_filt = detect_badchannels(raw_filt, "mag", 
                                         ref_meg=None, 
                                         significance_level=0.05, 
-                                        segment_len=round(raw.info['sfreq']*S['channel_reject']['sec']),
+                                        segment_len=round(raw.info['sfreq']*cfg['channel_reject']['sec']),
                                         )
                 
                 raw.info['bads'] = raw_filt.info['bads']
@@ -445,7 +445,7 @@ def channel_reject(S, raw, raw_emptyroom=None):
                 raw = detect_badchannels(raw, "mag", 
                                         ref_meg=None, 
                                         significance_level=0.05, 
-                                        segment_len=round(raw.info['sfreq']*S['channel_reject']['sec']),
+                                        segment_len=round(raw.info['sfreq']*cfg['channel_reject']['sec']),
                                         )
             
 
@@ -454,7 +454,7 @@ def channel_reject(S, raw, raw_emptyroom=None):
             print("Detecting bad channels using maxwell")
             start_time = time.time()
 
-            if S['channel_reject']['eSSS']:
+            if cfg['channel_reject']['eSSS']:
 
                 print("-- running eSSS")
                 raw_emptyroom.info['bads'] = raw.info['bads']
@@ -482,7 +482,7 @@ def channel_reject(S, raw, raw_emptyroom=None):
             print('maxwell flat: ', flat_chans)
             raw.info['bads'].extend(flat_chans)
 
-            if S['channel_reject']['plot']: 
+            if cfg['channel_reject']['plot']: 
                 # Plot noisy channel scores as heatmap
                 plt.figure(figsize=(10, 6))
                 plt.imshow(scores['scores_noisy'], aspect='auto')
@@ -508,12 +508,12 @@ def channel_reject(S, raw, raw_emptyroom=None):
             # Create epochs for RANSAC
             epochs_ransac = mne.Epochs(raw, 
                                     events=None, 
-                                    tmin=S['epoch']['tmin'], tmax=S['epoch']['tmax'], 
+                                    tmin=cfg['epoch']['tmin'], tmax=cfg['epoch']['tmax'], 
                                     baseline=None, 
                                     preload=True)
 
             # Fit RANSAC
-            ransac = Ransac(verbose=True, picks='mag', n_jobs=S['general']['n_jobs'], random_state=99)
+            ransac = Ransac(verbose=True, picks='mag', n_jobs=cfg['general']['n_jobs'], random_state=99)
             ransac = ransac.fit(epochs_ransac)
 
             # Apply RANSAC
@@ -534,7 +534,7 @@ def channel_reject(S, raw, raw_emptyroom=None):
     print('bads: ', raw.info['bads'])
 
 
-    if S['channel_reject']['plot']:
+    if cfg['channel_reject']['plot']:
 
         raw_filt = raw.copy().pick('mag').filter(l_freq=.1, h_freq=150, method='iir')
         raw_filt.plot(block=True, scalings={"mag": 8e-12}, n_channels=32, duration=120)
@@ -543,11 +543,11 @@ def channel_reject(S, raw, raw_emptyroom=None):
         del raw_filt
 
     print("\n---------------------------------------------------\n")
-    return S, raw
+    return cfg, raw
 
 
 
-def hfc_proj(S,raw):
+def hfc_proj(cfg,raw):
     # harmonic field correction ==========================================================================================================
     print("\n\n\nHarmonic Field Correction ---------------------------------------------------\n")
 
@@ -556,21 +556,21 @@ def hfc_proj(S,raw):
     raw_pre = raw.copy()
 
     # HFC
-    if not S['HFC']['amm']:
-        print(f"computing HFC order {S['HFC']['external_order']}")
-        hfc_proj = mne.preprocessing.compute_proj_hfc(raw.info, order=S['HFC']['external_order'], picks="mag")
+    if not cfg['HFC']['amm']:
+        print(f"computing HFC order {cfg['HFC']['external_order']}")
+        hfc_proj = mne.preprocessing.compute_proj_hfc(raw.info, order=cfg['HFC']['external_order'], picks="mag")
     else:
-        print(f"computing AMM order {S['HFC']['external_order']}, {S['HFC']['internal_order']}")
+        print(f"computing AMM (external: {cfg['HFC']['external_order']}, internal: {cfg['HFC']['internal_order']})")
         hfc_proj = compute_proj_amm(raw, 
-                                    Lout=S['HFC']['external_order'], 
-                                    Lin=S['HFC']['internal_order'], 
-                                    corr=S['HFC']['corr_lim']
+                                    Lout=cfg['HFC']['external_order'], 
+                                    Lin=cfg['HFC']['internal_order'], 
+                                    corr=cfg['HFC']['corr_lim']
                                     )
     raw.add_proj(hfc_proj)
 
 
     # apply HFC    
-    if S['HFC']['apply']:
+    if cfg['HFC']['apply']:
         raw.apply_proj(verbose="error")
         print("applied HFC")
     else:
@@ -582,7 +582,7 @@ def hfc_proj(S,raw):
 
 
     # plot HFC
-    if S['HFC']['plot']:
+    if cfg['HFC']['plot']:
 
 
         # raw.plot(block=True)
@@ -592,7 +592,7 @@ def hfc_proj(S,raw):
         
         # Plot PSD before HFC
         psd_orig = raw_pre.compute_psd(fmin=0, 
-                                       fmax=2*S['info']['line_freq'], 
+                                       fmax=2*cfg['info']['line_freq'], 
                                        picks="mag",
                                        n_fft=2000)
         psd_orig.plot(
@@ -604,7 +604,7 @@ def hfc_proj(S,raw):
         
         # Plot PSD after HFC
         psd_hfc = raw.copy().apply_proj(verbose="error").compute_psd(fmin=0, 
-                                                                     fmax=2*S['info']['line_freq'], 
+                                                                     fmax=2*cfg['info']['line_freq'], 
                                                                      picks="mag",
                                                                      n_fft=2000)
         
@@ -652,17 +652,17 @@ def hfc_proj(S,raw):
 
 
     print("\n---------------------------------------------------\n")
-    return S, raw
+    return cfg, raw
 
 
 
-def temporal_filter(S, raw):
+def temporal_filter(cfg, raw):
     # resample & filter ==========================================================================================================
     print("\n\n\nTemporal Filter ---------------------------------------------------\n")
 
 
     # plot before filter
-    if S['temporal_filter']['plot']:
+    if cfg['temporal_filter']['plot']:
         _, axs = plt.subplots(2, 1, figsize=(10, 8))
         raw.compute_psd(fmin=0, 
                         fmax=120,
@@ -674,37 +674,37 @@ def temporal_filter(S, raw):
                             axes = axs[0])
 
     # Notch Filter ---------------------------------------------------------
-    if S['temporal_filter']['notch_spectrum']:
+    if cfg['temporal_filter']['notch_spectrum']:
 
         print('\n\nnotch filter: spectrum fit ----------\n')
         raw.notch_filter(freqs=None, 
                          method='spectrum_fit', 
                          filter_length='10s',
-                         n_jobs=S['general']['n_jobs'],
+                         n_jobs=cfg['general']['n_jobs'],
                          )
         
     else:
 
         print('\n\nnotch filter: traditional method ----------\n')
-        raw.notch_filter(S['info']['line_freq'])
-        if (2*S['info']['line_freq']) <  (S['temporal_filter']['range'][1]+10):
-            for ff in range(2, int(1+np.ceil((S['temporal_filter']['range'][1] + 10) / S['info']['line_freq']))):
-                print(f"\n\nnotch filter: {S['info']['line_freq']*ff} Hz ----------\n")
-                raw.notch_filter(S['info']['line_freq']*ff)
+        raw.notch_filter(cfg['info']['line_freq'])
+        if (2*cfg['info']['line_freq']) <  (cfg['temporal_filter']['range'][1]+10):
+            for ff in range(2, int(1+np.ceil((cfg['temporal_filter']['range'][1] + 10) / cfg['info']['line_freq']))):
+                print(f"\n\nnotch filter: {cfg['info']['line_freq']*ff} Hz ----------\n")
+                raw.notch_filter(cfg['info']['line_freq']*ff)
 
 
     # seperately high-pass filter then low-pass filter ---------------------------------------------------------
-    raw.filter(l_freq=S['temporal_filter']['range'][0], 
+    raw.filter(l_freq=cfg['temporal_filter']['range'][0], 
                h_freq=None, 
-               fir_window=S['temporal_filter']['window'],
+               fir_window=cfg['temporal_filter']['window'],
                ).filter(l_freq=None, 
-               h_freq=S['temporal_filter']['range'][1], 
-               fir_window=S['temporal_filter']['window'],
+               h_freq=cfg['temporal_filter']['range'][1], 
+               fir_window=cfg['temporal_filter']['window'],
                )
 
 
     # plot after filter
-    if S['temporal_filter']['plot']:
+    if cfg['temporal_filter']['plot']:
 
         spec_filt = raw.compute_psd(fmin=0, 
                                     fmax=120, 
@@ -719,21 +719,21 @@ def temporal_filter(S, raw):
         plt.show()
 
         # plot filtered topomaps
-        if S['temporal_filter']['plot_topos']:
-            for axis in S['temporal_filter']['plot_axis']:
+        if cfg['temporal_filter']['plot_topos']:
+            for axis in cfg['temporal_filter']['plot_axis']:
 
-                if S['temporal_filter']['plot_bands_trouble']:
-                    spec_filt.get_axis(axis, sensor_wildcard=S['info']['sensor_wildcard']).plot_topomap(
-                         bands=S['temporal_filter']['plot_bands_trouble'],
+                if cfg['temporal_filter']['plot_bands_trouble']:
+                    spec_filt.get_axis(axis, sensor_wildcard=cfg['info']['sensor_wildcard']).plot_topomap(
+                         bands=cfg['temporal_filter']['plot_bands_trouble'],
                          ch_type='mag',
                          normalize=True,
                          show_names=True,
                          show=True)
                 
 
-                if S['temporal_filter']['plot_bands']:
-                    spec_filt.get_axis(axis, sensor_wildcard=S['info']['sensor_wildcard']).plot_topomap(
-                        bands=S['temporal_filter']['plot_bands'], 
+                if cfg['temporal_filter']['plot_bands']:
+                    spec_filt.get_axis(axis, sensor_wildcard=cfg['info']['sensor_wildcard']).plot_topomap(
+                        bands=cfg['temporal_filter']['plot_bands'], 
                         ch_type='mag', 
                         normalize=True, 
                         show_names=True,
@@ -748,11 +748,11 @@ def temporal_filter(S, raw):
     gc.collect()
 
     print("\n---------------------------------------------------\n")
-    return S, raw
+    return cfg, raw
 
 
 
-def segment_reject(S,raw,metric='std'):
+def segment_reject(cfg,raw,metric='std'):
     # reject continious segments ==========================================================================================================
     print('\n\nsegment rejection ---------------------------------------------------\n')
 
@@ -778,64 +778,64 @@ def segment_reject(S,raw,metric='std'):
                 metric="std",
                 detect_zeros=False,
                 channel_wise=False,
-                segment_len=round(raw.info['sfreq']*S['segment_reject']['sec']),
-                channel_threshold=S['segment_reject']['thresh'],
-                significance_level=S['segment_reject']['thresh'],
+                segment_len=round(raw.info['sfreq']*cfg['segment_reject']['sec']),
+                channel_threshold=cfg['segment_reject']['thresh'],
+                significance_level=cfg['segment_reject']['thresh'],
                 )
         
-        raw = detect_badsegments(
-                raw,
-                picks="mag",
-                ref_meg=False,
-                metric="std",
-                mode="diff",
-                detect_zeros=False,
-                channel_wise=False,
-                segment_len=round(raw.info['sfreq']*S['segment_reject']['sec']),
-                channel_threshold=S['segment_reject']['thresh'],
-                significance_level=S['segment_reject']['thresh'],
-                )
+        # raw = detect_badsegments(
+        #         raw,
+        #         picks="mag",
+        #         ref_meg=False,
+        #         metric="std",
+        #         mode="diff",
+        #         detect_zeros=False,
+        #         channel_wise=False,
+        #         segment_len=round(raw.info['sfreq']*cfg['segment_reject']['sec']),
+        #         channel_threshold=cfg['segment_reject']['thresh'],
+        #         significance_level=cfg['segment_reject']['thresh'],
+        #         )
     
-    if S['segment_reject']['plot']:
+    if cfg['segment_reject']['plot']:
         raw.plot(block=True)
 
 
     print("\n---------------------------------------------------\n")
-    return S, raw
+    return cfg, raw
 
 
 
-def fit_ica(S, raw):
+def fit_ica(cfg, raw):
     # ICA ==========================================================================================================
     print("\n\n\nICA ---------------------------------------------------\n")
 
     # filter for ICA
-    if S['temporal_filter']['range'][0] < 1.0:
-        raw_ica = raw.copy().filter(l_freq=1, h_freq=None, fir_window=S['temporal_filter']['window']).pick(picks="meg", exclude=raw.info['bads'])
+    if cfg['temporal_filter']['range'][0] < 1.0:
+        raw_ica = raw.copy().filter(l_freq=1, h_freq=None, fir_window=cfg['temporal_filter']['window']).pick(picks="meg", exclude=raw.info['bads'])
     else:
         raw_ica = raw.copy().pick(picks="meg", exclude=raw.info['bads'])
 
     # load for run
-    if S['ICA']['load'] and os.path.isfile(S['general']['ica_fname']):
+    if cfg['ICA']['load'] and os.path.isfile(cfg['general']['ica_fname']):
 
-        print(f"loading ICA from {S['general']['ica_fname']}")
-        ica = mne.preprocessing.read_ica(S['general']['ica_fname'])
+        print(f"loading ICA from {cfg['general']['ica_fname']}")
+        ica = mne.preprocessing.read_ica(cfg['general']['ica_fname'])
 
     else:        
 
         print("Fitting ICA...")
-        ica = mne.preprocessing.ICA(n_components=S['ICA']['n_components'], 
-                                    max_iter=S['ICA']['max_iter'],
-                                    random_state=S['ICA']['random_state'], 
-                                    method=S['ICA']['method'],
-                                    fit_params=S['ICA']['params'],
+        ica = mne.preprocessing.ICA(n_components=cfg['ICA']['n_components'], 
+                                    max_iter=cfg['ICA']['max_iter'],
+                                    random_state=cfg['ICA']['random_state'], 
+                                    method=cfg['ICA']['method'],
+                                    fit_params=cfg['ICA']['params'],
                                     )
         
 
         # fit ICA ---------------------------------------------------------
         ica.fit(raw_ica, 
-                decim=S['ICA']['decim'],
-                tstep=S['ICA']['tstep'],
+                decim=cfg['ICA']['decim'],
+                tstep=cfg['ICA']['tstep'],
                 reject_by_annotation=True,
                 )
         
@@ -850,7 +850,7 @@ def fit_ica(S, raw):
 
             
     # auto-label
-    if S['ICA']['auto_label']:
+    if cfg['ICA']['auto_label']:
         print('\nfind bad muscles components ---- \n')
         ica.exclude.extend(ica.find_bads_muscle(raw_ica)[0])
         print('\nfind bad ECG components ---- \n')
@@ -863,7 +863,7 @@ def fit_ica(S, raw):
     # plot ICA ---------------------------------------------------------
 
     # plot ICA components
-    for axis in S['ICA']['plot_axes']:
+    for axis in cfg['ICA']['plot_axes']:
         
         # plot all components
         plot_ica_axis(ica, raw_ica, axis=axis)
@@ -874,30 +874,30 @@ def fit_ica(S, raw):
     
     del raw_ica
 
-    if S['ICA']['save']:
-        print(f"saving ICA to {S['general']['ica_fname']}")
-        ica.save(S['general']['ica_fname'])
+    if cfg['ICA']['save']:
+        print(f"saving ICA to {cfg['general']['ica_fname']}")
+        ica.save(cfg['general']['ica_fname'])
     else:
         print("not saving ICA")
 
 
     print("\n---------------------------------------------------\n")
 
-    return S, ica
+    return cfg, ica
 
 
 
-def create_epoch(S, raw, ica):
+def create_epoch(cfg, raw, ica):
     # create standard & ICA epochs ==========================================================================================================
     print("\n\n\nEpoch ---------------------------------------------------\n")
 
 
     epochs = mne.Epochs(raw, 
                 events=None, 
-                tmin=S['epoch']['tmin'], tmax=S['epoch']['tmax'], 
+                tmin=cfg['epoch']['tmin'], tmax=cfg['epoch']['tmax'], 
                 baseline=None, # don't baseline before ICA
                 preload=True,
-                decim=S['epoch']['decim'],
+                decim=cfg['epoch']['decim'],
                 )
    
     if ica is not None:
@@ -906,18 +906,18 @@ def create_epoch(S, raw, ica):
 
     print('\nEpoch info ----------\n', epochs, '\n', epochs.info, '\n')
     print("\n---------------------------------------------------\n")
-    return S, epochs
+    return cfg, epochs
 
 
 
-def reject_epoch(S, epochs):
+def reject_epoch(cfg, epochs):
 
     # Epoch rejection 1 ==========================================================================================================
     print("\n\n\nEpoch rejection ---------------------------------------------------\n")
 
 
     # detect bad epochs
-    match S['epoch_reject']['method']:
+    match cfg['epoch_reject']['method']:
 
         case "osl":
             print("Detecting bad epochs using OSL")
@@ -933,9 +933,9 @@ def reject_epoch(S, epochs):
             # fit autoreject
             epochs_ar = epochs.copy().pick("mag")
 
-            ar = AutoReject(n_interpolate=S['epoch_reject']['ar-interp'], random_state=99, 
+            ar = AutoReject(n_interpolate=cfg['epoch_reject']['ar-interp'], random_state=99, 
                             picks="mag",
-                            n_jobs=S['general']['n_jobs'], verbose=True)
+                            n_jobs=cfg['general']['n_jobs'], verbose=True)
             ar.fit(epochs_ar)
             
             # remove rejected epochs
@@ -955,16 +955,16 @@ def reject_epoch(S, epochs):
 
 
     print("\n---------------------------------------------------\n")
-    return S, epochs
+    return cfg, epochs
 
 
 
-def save_preproc(S, epochs):
+def save_preproc(cfg, epochs):
     # save preproc data ==========================================================================================================
     print("\n\n\nSaving preproc data ---------------------------------------------------\n")
 
-    print(f"saving preproc data to {S['general']['preproc_fname']}")
-    epochs.save(S['general']['preproc_fname'], overwrite=True)
+    print(f"saving preproc data to {cfg['general']['preproc_fname']}")
+    epochs.save(cfg['general']['preproc_fname'], overwrite=True)
 
 
    
@@ -972,22 +972,22 @@ def save_preproc(S, epochs):
 
 
 
-def save_params(S):
+def save_params(cfg):
     # save preproc data ==========================================================================================================
     print("\n\n\nSaving fitting parameters ---------------------------------------------------\n")
 
     # Save parameters to json
-    print(f"saving parameters to {S['general']['param_fname']}")
+    print(f"saving parameters to {cfg['general']['param_fname']}")
 
     # Convert any non-serializable objects to strings
-    param_save = deepcopy(S)
-    for section in S.keys():
+    param_save = deepcopy(cfg)
+    for section in cfg.keys():
         for key, value in param_save[section].items():
             if not isinstance(value, (str, int, float, bool, list, dict, type(None))):
                 param_save[section][key] = str(value)
 
     # Save to json
-    with open(S['general']['param_fname'], 'w') as f:
+    with open(cfg['general']['param_fname'], 'w') as f:
         json.dump(param_save, f, indent=4)
 
     del param_save
@@ -997,13 +997,13 @@ def save_params(S):
 
 
 
-def save_report(S, raw, raw_emptyroom, epochs, ica):
+def save_report(cfg, raw, raw_emptyroom, epochs, ica):
     # save report ==========================================================================================================
     print("\n\n\nSaving report ---------------------------------------------------\n")
 
     report = mne.Report(verbose=True,
-                        info_fname=S['general']['preproc_fname'],
-                        subject=f"{S['participant']['id']:03}",
+                        info_fname=cfg['general']['preproc_fname'],
+                        subject=f"{cfg['participant']['id']:03}",
                         title="Preprocessing Report",
                         )
     
@@ -1031,10 +1031,10 @@ def save_report(S, raw, raw_emptyroom, epochs, ica):
     #                  )
     
     # ICA
-    report.add_ica(ica.get_axis("Z", sensor_wildcard=S['info']['sensor_wildcard']),
+    report.add_ica(ica.get_axis("Z", sensor_wildcard=cfg['info']['sensor_wildcard']),
                     title="ICA (Z)",
                     inst=epochs,
-                    n_jobs=S['general']['n_jobs'],
+                    n_jobs=cfg['general']['n_jobs'],
                     )
     
     # epochs
@@ -1044,8 +1044,8 @@ def save_report(S, raw, raw_emptyroom, epochs, ica):
 
 
     # save report
-    print(f"saving report to {S['general']['report_fname']}")
-    report.save(S['general']['report_fname'], overwrite=True)
+    print(f"saving report to {cfg['general']['report_fname']}")
+    report.save(cfg['general']['report_fname'], overwrite=True)
 
 
                       
@@ -1074,18 +1074,18 @@ def run_preproc(config_path=""):
     # %% init ==========================================================================================================
 
     # set params ---------------------------------------------------------
-    S = dict()
-    S = set_preproc_params(S, config_path)
-    S = make_paths(S)
+    cfg = dict()
+    cfg = set_preproc_params(cfg, config_path)
+    cfg = make_paths(cfg)
 
 
     # load data ---------------------------------------------------------
-    S, raw, raw_emptyroom = read_data(S)
+    cfg, raw, raw_emptyroom = read_data(cfg)
     
 
     # initial fit ---------------------------------------------------------
-    if S['eval_preproc']['run'][0]:
-        S['eval_preproc']['function'](S, raw)
+    if cfg['eval_preproc']['run'][0]:
+        cfg['eval_preproc']['function'](cfg, raw)
     else:
         print("\nno evaluation ------------------------------------\n")
 
@@ -1095,51 +1095,51 @@ def run_preproc(config_path=""):
     
 
     # reject segments ---------------------------------------------------------
-    if S['segment_reject']['run']:
-        S, raw = segment_reject(S, raw, metric='kurtosis')
+    if cfg['segment_reject']['run']:
+        cfg, raw = segment_reject(cfg, raw, metric='kurtosis')
     else:
         print("\nno segment rejection ------------------------------------\n")
 
 
 
     # channel rejection ---------------------------------------------------------
-    if S['channel_reject']['run']:
-        S, raw = channel_reject(S, raw, raw_emptyroom=raw_emptyroom)
+    if cfg['channel_reject']['run']:
+        cfg, raw = channel_reject(cfg, raw, raw_emptyroom=raw_emptyroom)
     else:
         print("\nno channel rejection ------------------------------------\n")
 
 
     # harmonic field correction ---------------------------------------------------------
-    if S['HFC']['run']:
-        S, raw = hfc_proj(S, raw)
+    if cfg['HFC']['run']:
+        cfg, raw = hfc_proj(cfg, raw)
     else:
         print("\nno HFC ------------------------------------\n")
 
 
     # temporal filter ---------------------------------------------------------
-    if S['temporal_filter']['run']:
-        S, raw = temporal_filter(S, raw)
+    if cfg['temporal_filter']['run']:
+        cfg, raw = temporal_filter(cfg, raw)
     else:
         print("\nno filter ------------------------------------\n")
 
 
     # reject segments ---------------------------------------------------------
-    if S['segment_reject']['run']:
-        S, raw = segment_reject(S, raw)
+    if cfg['segment_reject']['run']:
+        cfg, raw = segment_reject(cfg, raw)
     else:
         print("\nno segment rejection ------------------------------------\n")
 
 
     # plot evoked ---------------------------------------------------------
-    if S['eval_preproc']['run'][1]:
-        S['eval_preproc']['function'](S, raw)
+    if cfg['eval_preproc']['run'][1]:
+        cfg['eval_preproc']['function'](cfg, raw)
     else:
         print("\nno evaluation ------------------------------------\n")
 
 
     # ICA ----------------------------------------------------------------
-    if S['ICA']['run']:
-        S, ica = fit_ica(S, raw)
+    if cfg['ICA']['run']:
+        cfg, ica = fit_ica(cfg, raw)
     else:
         print("\nno ICA ------------------------------------\n")
         ica = None
@@ -1149,19 +1149,19 @@ def run_preproc(config_path=""):
     # %% epoch  ==========================================================================================================
     
     # create epochs ---------------------------------------------------------
-    S, epochs = create_epoch(S, raw, ica)
+    cfg, epochs = create_epoch(cfg, raw, ica)
 
 
     # reject epochs ---------------------------------------------------------
-    if S['epoch_reject']['run']:
-        S, epochs = reject_epoch(S, epochs)
+    if cfg['epoch_reject']['run']:
+        cfg, epochs = reject_epoch(cfg, epochs)
     else:
         print("\nno epoch rejection ------------------------------------\n")
 
 
     # evaluate preproc ---------------------------------------------------------
-    if S['eval_preproc']['run'][2]:
-        S['eval_preproc']['function'](S, raw)
+    if cfg['eval_preproc']['run'][2]:
+        cfg['eval_preproc']['function'](cfg, raw)
     else:
         print("\nno evaluation ------------------------------------\n")
 
@@ -1171,22 +1171,22 @@ def run_preproc(config_path=""):
 
 
     # save preproc data ---------------------------------------------------------
-    if S['general']['save_preproc']:
-        save_preproc(S, epochs)
+    if cfg['general']['save_preproc']:
+        save_preproc(cfg, epochs)
     else:
         print("\nno save ------------------------------------\n")
 
 
     # save parameters ---------------------------------------------------------
-    if S['general']['save_param']:
-        save_params(S)
+    if cfg['general']['save_param']:
+        save_params(cfg)
     else:
         print("\nno save ------------------------------------\n")
 
 
     # save report ---------------------------------------------------------
-    if S['general']['save_report']:
-        save_report(S, raw, raw_emptyroom, epochs, ica)
+    if cfg['general']['save_report']:
+        save_report(cfg, raw, raw_emptyroom, epochs, ica)
     else:
         print("\nno save ------------------------------------\n")
 

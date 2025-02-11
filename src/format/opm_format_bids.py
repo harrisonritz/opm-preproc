@@ -18,7 +18,7 @@ import sys
 
 # %% import parameters
 
-def set_bids_params(S, config_path=""):
+def set_bids_params(cfg, config_path=""):
 
     # set-up configuration ==========================================================================================================
     print("\n\n\nloading configuration ---------------------------------------------------\n")
@@ -39,9 +39,19 @@ def set_bids_params(S, config_path=""):
         tasks: ["oddball", "oddball"]
 
     trigger:
-        stim_id: ["Trigger1[Z]", "Trigger2[Z]"]
-        old_trigger_id: [3, 3]
-        new_trigger_id: [1, 2]
+        stim_id: [
+                ["Trigger1[Z]", "Trigger2[Z]"],
+                ["Trigger1[Z]", "Trigger2[Z]"],
+                ]
+
+        old_trigger_id: [
+                        [3,3],
+                        [3,3],
+                        ] 
+        new_trigger_id: [
+                        [1,2],
+                        [3,4],
+                        ]
         event_desc:
             1: "standard/left"
             2: "deviant/left"
@@ -62,28 +72,28 @@ def set_bids_params(S, config_path=""):
     """
 
     # Load config file
-    S = yaml.safe_load(base_config)
+    cfg = yaml.safe_load(base_config)
     if config_path:
         print(f"\n\nloading config: {config_path}\n")
         with open(config_path, 'r') as stream:
             proc = yaml.safe_load(stream)
-        S.update(proc)
-        S['participant']['config_path'] = config_path
+        cfg.update(proc)
+        cfg['participant']['config_path'] = config_path
 
-    return S
-
-
+    return cfg
 
 
-def bids_conversion(S):
+
+
+def bids_conversion(cfg):
     # %% convert to BIDS ---------------------------------------------------------
 
     # loop over subjects
     # can provide list of lists in the config file, or run per-subject
-    for sx, (subj, runs, emptyroom, task) in enumerate(zip(S["session"]["ids"], 
-                                                          S["session"]["run_prefix"], 
-                                                          S["session"]["emptyroom_prefix"],  
-                                                          S["session"]["tasks"])):
+    for sx, (subj, runs, emptyroom, task) in enumerate(zip(cfg["session"]["ids"], 
+                                                          cfg["session"]["run_prefix"], 
+                                                          cfg["session"]["emptyroom_prefix"],  
+                                                          cfg["session"]["tasks"])):
         
         raw_list = list()
         print("\nparticipant: ", subj, "--------\n")
@@ -93,28 +103,28 @@ def bids_conversion(S):
 
             if emptyroom:
                 fn_empty_room = os.path.join(
-                    S['dirs']['emptyroom_dir'], 
+                    cfg['dirs']['emptyroom_dir'], 
                     f"sub-{subj:03}", 
                     f"{emptyroom}_cMEG_Data", 
                     f"{emptyroom}_meg.fif"
                     )
             else:
                 fn_empty_room = os.path.join(
-                    S['dirs']['data_dir'], 
+                    cfg['dirs']['data_dir'], 
                     f"sub-{subj:03}", 
                     f"{emptyroom}_cMEG_Data", 
                     f"{emptyroom}_meg.fif"
                     )
 
             raw_empty_room = mne.io.read_raw_fif(fn_empty_room)
-            raw_empty_room.info["line_freq"] = S["recording_info"]["line_freq"]
+            raw_empty_room.info["line_freq"] = cfg["recording_info"]["line_freq"]
             
             emptyroom_bids_path = mne_bids.BIDSPath(
                 subject=f"{subj:03}",
-                session=S["session"]["session"],
+                session=cfg["session"]["session"],
                 task="emptyroom",
                 run="01",
-                root=S['dirs']['bids_dir'],
+                root=cfg['dirs']['bids_dir'],
             )
             
             mne_bids.write_raw_bids(
@@ -127,26 +137,29 @@ def bids_conversion(S):
             )
         
         # Loop over runs for this subject -----------------------------------------
-        for run in runs:
+        for rr, (run) in enumerate(runs):
             print("\nrun: ", run, "--------\n")
             
             # Construct file path
-            fn = os.path.join(S['dirs']['data_dir'], f"sub-{subj:03}", f"{run}_cMEG_Data", f"{run}_meg.fif")
+            fn = os.path.join(cfg['dirs']['data_dir'], f"sub-{subj:03}", f"{run}_cMEG_Data", f"{run}_meg.fif")
             raw = mne.io.read_raw_fif(fn)
             
             
-            raw.info["line_freq"] = S["recording_info"]["line_freq"]
+            raw.info["line_freq"] = cfg["recording_info"]["line_freq"]
             raw.info["subject_info"] = {
                 "id": int(subj),
                 "his_id": f"{subj:03}",
                 }
             
             
-            # Add events using triggers from S["trigger"]
+            # Add events using triggers from cfg["trigger"]
             event_list = list()
-            for stim, old_trigger, new_trigger in zip(S["trigger"]["stim_id"],
-                                                    S["trigger"]["old_trigger_id"],
-                                                    S["trigger"]["new_trigger_id"]):
+            for stim, old_trigger, new_trigger in zip(cfg["trigger"]["stim_id"][rr],
+                                                    cfg["trigger"]["old_trigger_id"][rr],
+                                                    cfg["trigger"]["new_trigger_id"][rr]):
+                print(stim)
+                print(old_trigger)
+                print(new_trigger)
                 event = mne.find_events(raw, stim_channel=stim, min_duration=0.001)
                 event_list.append(mne.merge_events(event, [int(old_trigger)], new_trigger))
             
@@ -157,7 +170,7 @@ def bids_conversion(S):
             annot = mne.annotations_from_events(
                 events=events,
                 sfreq=raw.info["sfreq"],
-                event_desc=S["trigger"]["event_desc"]
+                event_desc=cfg["trigger"]["event_desc"]
             )
             raw.set_annotations(annot)
             
@@ -169,10 +182,10 @@ def bids_conversion(S):
         
         bids_path = mne_bids.BIDSPath(
             subject=f"{subj:03}",
-            session=S["session"]["session"],
+            session=cfg["session"]["session"],
             task=task,
             run="01",
-            root=S['dirs']['bids_dir'],
+            root=cfg['dirs']['bids_dir'],
         )
         
         mne_bids.write_raw_bids(
@@ -192,5 +205,5 @@ if __name__ == "__main__":
     else:
         config_path = ""
 
-    S = set_bids_params(config_path)
-    bids_conversion(S)
+    cfg = set_bids_params(config_path)
+    bids_conversion(cfg)
