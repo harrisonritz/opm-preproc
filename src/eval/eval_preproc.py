@@ -50,8 +50,8 @@ def eval_oddball(S, raw, epoch_in=None):
     else:
         epochs = epoch_in.copy().pick('mag', exclude='bads').crop(tmin=np.maximum(-.200, epoch_in.tmin),tmax=None).apply_baseline()
 
-    classes_all = ['standard/left', 'standard/right', 'devient/left', 'devient/right']
-    classes_decode = ['standard/right', 'devient/right']
+    classes_all = ['standard/left', 'standard/right', 'deviant/left', 'deviant/right']
+    classes_decode = ['standard/right', 'deviant/right']
     classes_title = 'right'
     epochs = epochs.equalize_event_counts(event_ids=classes_all)[0]
 
@@ -72,7 +72,7 @@ def eval_oddball(S, raw, epoch_in=None):
         evk_dict,
         picks='mag',
         ci=0.95,
-        colors=dict(standard=0, devient=1),
+        colors=dict(standard=0, deviant=1),
         linestyles=dict(left="solid", right="dashed"),
         time_unit="ms",
         axes=axes['topo'],
