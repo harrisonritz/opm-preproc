@@ -31,14 +31,18 @@ def set_bids_params(cfg, config_path=""):
         emptyroom_dir: "/Users/hr0283/Projects/opm-preproc/examples/oddball/raw"    # UPDATE THIS PATH
     
     session:
-        ids: [2]                                         # list of subjects
+        ids: 2
         experiment: "oddball_pilot"
         session: "01"
-        run_prefix: [["20241218_153301", "20241218_155254"]]
-        emptyroom_prefix: ["20241218_160936"]  # corrected typo in key name
-        tasks: ["oddball", "oddball"]
+        run_prefix: ["20241218_153301", "20241218_155254"]
+        emptyroom_prefix: "20241218_160936"  # corrected typo in key name
+        task: "oddball"
 
     trigger:
+
+        find_events: true
+        rename_annot: false
+
         stim_id: [
                 ["Trigger1[Z]", "Trigger2[Z]"],
                 ["Trigger1[Z]", "Trigger2[Z]"],
@@ -59,16 +63,11 @@ def set_bids_params(cfg, config_path=""):
             4: "deviant/right"
             900: "BAD boundary"
             901: "EDGE boundary"
-        event_id:
-            "standard/left": 1
-            "deviant/left": 2
-            "standard/right": 3
-            "deviant/right": 4
-            "BAD boundary": 900
-            "EDGE boundary": 901
+
 
     recording_info:
         line_freq: 60.0
+        
     """
 
     # Load config file
@@ -90,76 +89,81 @@ def bids_conversion(cfg):
 
     # loop over subjects
     # can provide list of lists in the config file, or run per-subject
-    for sx, (subj, runs, emptyroom, task) in enumerate(zip(cfg["session"]["ids"], 
-                                                          cfg["session"]["run_prefix"], 
-                                                          cfg["session"]["emptyroom_prefix"],  
-                                                          cfg["session"]["tasks"])):
-        
-        raw_list = list()
-        print("\nparticipant: ", subj, "--------\n")
-        
-        # Process empty room data ------------------------------------------------
+    # for sx, (subj, runs, emptyroom, task) in enumerate(zip(cfg["session"]["ids"], 
+    #                                                       cfg["session"]["run_prefix"], 
+    #                                                       cfg["session"]["emptyroom_prefix"],  
+    #                                                       cfg["session"]["tasks"])):
+
+    subj = cfg["session"]["ids"]
+    runs = cfg["session"]["run_prefix"]
+    emptyroom = cfg["session"]["emptyroom_prefix"]
+    task = cfg["session"]["task"]
+
+    raw_list = list()
+    print("\nparticipant: ", subj, "--------\n")
+    
+    # Process empty room data ------------------------------------------------
+    if emptyroom:
+
         if emptyroom:
+            fn_empty_room = os.path.join(
+                cfg['dirs']['emptyroom_dir'], 
+                f"sub-{subj:03}", 
+                f"{emptyroom}_cMEG_Data", 
+                f"{emptyroom}_meg.fif"
+                )
+        else:
+            fn_empty_room = os.path.join(
+                cfg['dirs']['data_dir'], 
+                f"sub-{subj:03}", 
+                f"{emptyroom}_cMEG_Data", 
+                f"{emptyroom}_meg.fif"
+                )
 
-            if emptyroom:
-                fn_empty_room = os.path.join(
-                    cfg['dirs']['emptyroom_dir'], 
-                    f"sub-{subj:03}", 
-                    f"{emptyroom}_cMEG_Data", 
-                    f"{emptyroom}_meg.fif"
-                    )
-            else:
-                fn_empty_room = os.path.join(
-                    cfg['dirs']['data_dir'], 
-                    f"sub-{subj:03}", 
-                    f"{emptyroom}_cMEG_Data", 
-                    f"{emptyroom}_meg.fif"
-                    )
-
-            raw_empty_room = mne.io.read_raw_fif(fn_empty_room)
-            raw_empty_room.info["line_freq"] = cfg["recording_info"]["line_freq"]
-            
-            emptyroom_bids_path = mne_bids.BIDSPath(
-                subject=f"{subj:03}",
-                session=cfg["session"]["session"],
-                task="emptyroom",
-                run="01",
-                root=cfg['dirs']['bids_dir'],
-            )
-            
-            mne_bids.write_raw_bids(
-                raw_empty_room,
-                emptyroom_bids_path,
-                allow_preload=True,
-                overwrite=True,
-                events=None,
-                format="FIF",
-            )
+        raw_empty_room = mne.io.read_raw_fif(fn_empty_room)
+        raw_empty_room.info["line_freq"] = cfg["recording_info"]["line_freq"]
         
-        # Loop over runs for this subject -----------------------------------------
-        for rr, (run) in enumerate(runs):
-            print("\nrun: ", run, "--------\n")
-            
-            # Construct file path
-            fn = os.path.join(cfg['dirs']['data_dir'], f"sub-{subj:03}", f"{run}_cMEG_Data", f"{run}_meg.fif")
-            raw = mne.io.read_raw_fif(fn)
-            
-            
-            raw.info["line_freq"] = cfg["recording_info"]["line_freq"]
-            raw.info["subject_info"] = {
-                "id": int(subj),
-                "his_id": f"{subj:03}",
-                }
-            
-            
-            # Add events using triggers from cfg["trigger"]
+        emptyroom_bids_path = mne_bids.BIDSPath(
+            subject=f"{subj:03}",
+            session=cfg["session"]["session"],
+            task="emptyroom",
+            root=cfg['dirs']['bids_dir'],
+        )
+        
+        mne_bids.write_raw_bids(
+            raw_empty_room,
+            emptyroom_bids_path,
+            allow_preload=True,
+            overwrite=True,
+            events=None,
+            format="FIF",
+        )
+    
+    # Loop over runs for this subject -----------------------------------------
+    for rr, (run) in enumerate(runs):
+        print("\nrun: ", run, "--------\n")
+        
+        # Construct file path
+        fn = os.path.join(cfg['dirs']['data_dir'], f"sub-{subj:03}", f"{run}_cMEG_Data", f"{run}_meg.fif")
+        raw = mne.io.read_raw_fif(fn)
+        
+        
+        raw.info["line_freq"] = cfg["recording_info"]["line_freq"]
+        raw.info["subject_info"] = {
+            "id": int(subj),
+            "his_id": f"{subj:03}",
+            }
+        
+        
+        # Add events using triggers from cfg["trigger"]
+        if cfg["trigger"]["find_events"]:
+
+            print("\n\n\nFINDING EVENTS\n\n\n")
             event_list = list()
             for stim, old_trigger, new_trigger in zip(cfg["trigger"]["stim_id"][rr],
                                                     cfg["trigger"]["old_trigger_id"][rr],
                                                     cfg["trigger"]["new_trigger_id"][rr]):
-                print(stim)
-                print(old_trigger)
-                print(new_trigger)
+    
                 event = mne.find_events(raw, stim_channel=stim, min_duration=0.001)
                 event_list.append(mne.merge_events(event, [int(old_trigger)], new_trigger))
             
@@ -173,28 +177,30 @@ def bids_conversion(cfg):
                 event_desc=cfg["trigger"]["event_desc"]
             )
             raw.set_annotations(annot)
-            
-            raw_list.append(raw)
-        
 
-        # Concatenate raws for all runs of this subject
-        all_raw = mne.concatenate_raws(raw_list, preload=True, on_mismatch="raise")
+        if cfg["trigger"]["rename_annot"]:
+            raw.annotations.rename(cfg["trigger"]["event_desc"]) 
         
-        bids_path = mne_bids.BIDSPath(
-            subject=f"{subj:03}",
-            session=cfg["session"]["session"],
-            task=task,
-            run="01",
-            root=cfg['dirs']['bids_dir'],
-        )
-        
-        mne_bids.write_raw_bids(
-            all_raw,
-            bids_path,
-            allow_preload=True,
-            overwrite=True,
-            format="FIF",
-        )
+        raw_list.append(raw)
+    
+
+    # Concatenate raws for all runs of this subject
+    all_raw = mne.concatenate_raws(raw_list, preload=True, on_mismatch="raise")
+    
+    bids_path = mne_bids.BIDSPath(
+        subject=f"{subj:03}",
+        session=cfg["session"]["session"],
+        task=task,
+        root=cfg['dirs']['bids_dir'],
+    )
+    
+    mne_bids.write_raw_bids(
+        all_raw,
+        bids_path,
+        allow_preload=True,
+        overwrite=True,
+        format="FIF",
+    )
 
 
 # %% main ---------------------------------------------------------------------

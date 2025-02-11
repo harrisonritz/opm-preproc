@@ -142,7 +142,6 @@ def set_preproc_params(cfg, config_path=""):
     participant:
         id: 2
         session: 1
-        run: 1
         task: "oddball"
         datatype: "meg"
         known_bads: [
@@ -192,8 +191,8 @@ def set_preproc_params(cfg, config_path=""):
         run: True
         plot: True
         amm: True
-        external_order: 6 # use this for standard HFC
-        internal_order: 9
+        external_order: 4 # use this for standard HFC
+        internal_order: 8
         corr_lim: .95
         apply: True
 
@@ -309,7 +308,6 @@ def make_paths(cfg):
             subject = f"{cfg['participant']['id']:03}", 
             session = f"{cfg['participant']['session']:02}", 
             task = cfg['participant']['task'],
-            run = f"{cfg['participant']['run']:02}",
             datatype = cfg['participant']['datatype'], 
             root = cfg['participant']['data_root']
         )
@@ -319,7 +317,6 @@ def make_paths(cfg):
             subject = f"{cfg['participant']['id']:03}", 
             session = f"{cfg['participant']['session']:02}", 
             task = 'emptyroom',
-            run = f"{cfg['participant']['run']:02}",
             datatype = cfg['participant']['datatype'], 
             root = cfg['participant']['data_root']
         )
@@ -354,7 +351,7 @@ def read_data(cfg):
 
     # read-in data ==========================================================================================================
     print("\n\n\nReading in data ---------------------------------------------------\n")
-    print(f"Participant: {cfg['participant']['id']}, Session: {cfg['participant']['session']}, Run: {cfg['participant']['run']}, Task: {cfg['participant']['task']}, Datatype: {cfg['participant']['datatype']}")
+    print(f"Participant: {cfg['participant']['id']}, Session: {cfg['participant']['session']}, Task: {cfg['participant']['task']}, Datatype: {cfg['participant']['datatype']}")
     print(f"data path: {cfg['participant']['data_path']}")
 
 
