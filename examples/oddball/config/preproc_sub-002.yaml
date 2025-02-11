@@ -1,0 +1,107 @@
+participant:
+        id: 2
+        session: 1
+        run: 1
+        task: "oddball"
+        datatype: "meg"
+        known_bads: [
+            '2E[X]', '2E[Y]', '2E[Z]', 
+            '2Z[X]', '2Z[Y]', '2Z[Z]', 
+            '29[X]', '29[Y]', '29[Z]',
+        ]
+        do_BIDS: True
+        data_root: "/Users/hr0283/Projects/opm-preproc/examples/oddball/bids" # UPDATE THIS TO YOUR PATH
+        data_path:          # set manually if not using BIDS
+        emptyroom_path:     # set manually if not using BIDS
+
+info:
+        sample_rate:
+        line_freq: 60.0
+        sensor_wildcard: '^..\\[{axis}]$'
+
+general:
+        save_name: "test-preproc"
+        save_label: "test-preproc_"
+        save_preproc: True
+        save_param: True
+        save_report: True
+        n_jobs: -1
+        speed_run: False
+
+read_data:
+        plot: False
+
+eval_preproc:
+        run: [False, False, True]
+        function: eval.eval_preproc.eval_oddball
+        cv: 10
+        plot_axes: ['Z']
+        save: False
+
+channel_reject:
+        run: True
+        plot: False
+        method: "osl"  
+        dur: 5.0
+        filter: True
+        eSSS: False
+        sec: 1.0
+
+HFC:
+        run: True
+        plot: True
+        amm: True
+        external_order: 6 # use this for standard HFC
+        internal_order: 9
+        corr_lim: .95
+        apply: True
+
+temporal_filter:
+        run: True
+        plot: True
+        plot_topos: False
+        plot_bands: {
+            'Delta (0-4 Hz)': [0, 4], 
+            'Theta (4-8 Hz)': [4, 8], 
+            'Alpha (8-12 Hz)': [8, 12], 
+            'Beta (12-30 Hz)': [12, 30], 
+            'Gamma (30-45 Hz)': [30, 45]
+        }
+        plot_bands_trouble: {'OPM Trouble (13-16 Hz)': [13, 16]}
+        plot_axis: ['X', 'Y', 'Z']
+        range: [0.1, 30]
+        window: "blackman"
+        notch_spectrum: True
+
+segment_reject:
+        run: True
+        plot: False
+        thresh: 0.05
+        sec: 1.0
+
+ICA:
+        run: True
+        plot_axes: ['Z'] 
+        n_components: 64
+        method: "picard"
+        params: {"ortho": True, "extended": True}
+        decim: 4
+        tstep: 1.0
+        max_iter: 1000
+        random_state: 99
+        auto_label: False
+        apply: True
+        save: False
+        load: False
+
+epoch:
+        plot: False
+        tmin: -0.5
+        tmax: 0.5
+        decim: 2
+
+epoch_reject:
+        run: True
+        reject_plot: False
+        method: 'osl'
+        ar-interp: [0, 1, 2, 3]

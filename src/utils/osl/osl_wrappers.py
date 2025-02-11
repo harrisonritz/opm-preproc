@@ -2,6 +2,34 @@
 
 """
 
+
+# OSL-EPHYS COPYRIGHT
+# Copyright 2021-2024 University of Oxford, Oxford, UK.
+
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+
+#     http://www.apache.org/licenses/LICENSE-2.0
+
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+
+
+# This software includes code from MNE-Python, which is licensed under the BSD-3-Clause license:
+# https://github.com/mne-tools/mne-python/blob/main/LICENSE.txt
+
+# This software includes code from FSL-Python, which is licensed under the Apache License:
+# https://git.fmrib.ox.ac.uk/fsl/fslpy/-/blob/main/LICENSE
+
+# For the full text of these licenses, please see the LICENSE file in the root directory of these projects.
+
+
+
 # Authors: Andrew Quinn <a.quinn@bham.ac.uk>
 #          Chetan Gohil <chetan.gohil@psych.ox.ac.uk>
 #          Mats van Es <mats.vanes@psych.ox.ac.uk>
