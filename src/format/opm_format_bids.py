@@ -18,7 +18,7 @@ import sys
 
 # %% import parameters
 
-def set_bids_params(cfg, config_path=""):
+def set_bids_params(config_path=""):
 
     # set-up configuration ==========================================================================================================
     print("\n\n\nloading configuration ---------------------------------------------------\n")
@@ -26,58 +26,23 @@ def set_bids_params(cfg, config_path=""):
     # baseline configuration (set for oddball example)
     base_config = """
     dirs:
-        data_dir: "/Users/hr0283/Projects/opm-preproc/examples/oddball/raw"         # UPDATE THIS PATH
-        bids_dir: "/Users/hr0283/Projects/opm-preproc/examples/oddball/bids"        # UPDATE THIS PATH
-        emptyroom_dir: "/Users/hr0283/Projects/opm-preproc/examples/oddball/raw"    # UPDATE THIS PATH
-    
+        
     session:
-        ids: 2
-        experiment: "oddball_pilot"
-        session: "01"
-        run_prefix: ["20241218_153301", "20241218_155254"]
-        emptyroom_prefix: "20241218_160936"  # corrected typo in key name
-        task: "oddball"
 
     trigger:
 
-        find_events: true
-        rename_annot: false
-
-        stim_id: [
-                ["Trigger1[Z]", "Trigger2[Z]"],
-                ["Trigger1[Z]", "Trigger2[Z]"],
-                ]
-
-        old_trigger_id: [
-                        [3,3],
-                        [3,3],
-                        ] 
-        new_trigger_id: [
-                        [1,2],
-                        [3,4],
-                        ]
-        event_desc:
-            1: "standard/left"
-            2: "deviant/left"
-            3: "standard/right"
-            4: "deviant/right"
-            900: "BAD boundary"
-            901: "EDGE boundary"
-
-
     recording_info:
-        line_freq: 60.0
         
     """
 
     # Load config file
     cfg = yaml.safe_load(base_config)
+   
+    print(f"\n\nloading config: {config_path}\n")
     if config_path:
-        print(f"\n\nloading config: {config_path}\n")
         with open(config_path, 'r') as stream:
             proc = yaml.safe_load(stream)
         cfg.update(proc)
-        cfg['participant']['config_path'] = config_path
 
     return cfg
 
@@ -177,15 +142,16 @@ def bids_conversion(cfg):
                 event_desc=cfg["trigger"]["event_desc"]
             )
             raw.set_annotations(annot)
-
-        if cfg["trigger"]["rename_annot"]:
-            raw.annotations.rename(cfg["trigger"]["event_desc"]) 
-        
+ 
         raw_list.append(raw)
-    
+
 
     # Concatenate raws for all runs of this subject
     all_raw = mne.concatenate_raws(raw_list, preload=True, on_mismatch="raise")
+
+    # Rename annotations
+    if cfg["trigger"]["rename_annot"]:
+        all_raw.annotations.rename(cfg["trigger"]["event_desc"]) 
     
     bids_path = mne_bids.BIDSPath(
         subject=f"{subj:03}",
@@ -193,7 +159,8 @@ def bids_conversion(cfg):
         task=task,
         root=cfg['dirs']['bids_dir'],
     )
-    
+
+
     mne_bids.write_raw_bids(
         all_raw,
         bids_path,
@@ -208,8 +175,12 @@ if __name__ == "__main__":
 
     if len(sys.argv) > 1:
         config_path = sys.argv[1]
+        print('config path: ', config_path)
     else:
         config_path = ""
 
+    print('config path: ', config_path)
     cfg = set_bids_params(config_path)
     bids_conversion(cfg)
+
+    print("\n\n\nDONE!\n\n\n")
