@@ -173,7 +173,7 @@ def set_preproc_params(cfg, config_path=""):
         plot: False
 
     eval_preproc:
-        run: [True, True, True]
+        run: [False, False, True]
         function: eval.eval_preproc.eval_oddball
         cv: 10
         plot_axes: ['Z']
