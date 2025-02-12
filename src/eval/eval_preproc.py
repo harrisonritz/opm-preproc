@@ -24,12 +24,28 @@ from sklearn.model_selection import ShuffleSplit, cross_val_score
 
 
 
-def pick_axis(inst, axis='Z'): 
-    return mne.pick_channels_regexp(inst.info['ch_names'], regexp=f"^..\\[{axis}]$")
+def pick_axis(inst, axis='Z', sensor_wildcard=lambda axis: f"^..\\[{axis}]$"):
+    """Pick sensors axis based on regular expression pattern.
+
+    Parameters
+    ----------
+    inst : mne.io.Raw | mne.Epochs
+        The MNE object to pick channels from.
+    axis : str
+        Sensor axis to keep, must be 'X', 'Y' or 'Z' (default 'Z')
+    sensor_wildcard : callable
+        Function that returns a regular expression pattern for the sensor names
+
+    Returns
+    -------
+    List[int]
+        The indices of the picked channels.
+    """
+    return mne.pick_channels_regexp(inst.info['ch_names'], regexp=sensor_wildcard(axis))
 
 
 
-def eval_oddball(S, raw, epoch_in=None):
+def eval_oddball(cfg, raw, epoch_in=None):
     
     
     
@@ -45,7 +61,7 @@ def eval_oddball(S, raw, epoch_in=None):
                     baseline=(-.200, 0),
                     preload=True,
                     proj=True,
-                    decim=S['epoch']['decim'],
+                    decim=cfg['epoch']['decim'],
                     ).pick('mag', exclude='bads')
     else:
         epochs = epoch_in.copy().pick('mag', exclude='bads').crop(tmin=np.maximum(-.200, epoch_in.tmin),tmax=None).apply_baseline()
@@ -93,8 +109,8 @@ def eval_oddball(S, raw, epoch_in=None):
     # decoder = LogisticRegression(solver="liblinear")
 
     clf = make_pipeline(embeder, decoder)
-    time_decod = SlidingEstimator(clf, n_jobs=S['general']['n_jobs'], scoring="roc_auc", verbose=True)
-    scores = cross_val_multiscore(time_decod, X, y, cv=ShuffleSplit(S['eval_preproc']['cv'], test_size=0.2, random_state=99), n_jobs=S['general']['n_jobs'])
+    time_decod = SlidingEstimator(clf, n_jobs=cfg['general']['n_jobs'], scoring="roc_auc", verbose=True)
+    scores = cross_val_multiscore(time_decod, X, y, cv=ShuffleSplit(cfg['eval_preproc']['cv'], test_size=0.2, random_state=99), n_jobs=cfg['general']['n_jobs'])
     
     # Plot
     axes['decode_time'].plot(epochs.times, np.mean(scores, axis=0), label="score")
@@ -107,15 +123,15 @@ def eval_oddball(S, raw, epoch_in=None):
     plt.show()
 
     # save
-    if S['eval_preproc']['save']:
-        np.mean(scores, axis=0).tofile(f"decode{S['participant']['id']}_{S['HFC']['order']}.csv", sep = ',')
+    if cfg['eval_preproc']['save']:
+        np.mean(scores, axis=0).tofile(f"decode{cfg['participant']['id']}_{cfg['HFC']['order']}.csv", sep = ',')
 
 
     # time-varying patterns ---------------------------------------------------------
     embeder = StandardScaler()
     decoder = LinearModel(decoder)
     clf = make_pipeline(embeder, decoder)
-    time_decod = SlidingEstimator(clf, n_jobs=S['general']['n_jobs'], scoring="roc_auc", verbose=True)
+    time_decod = SlidingEstimator(clf, n_jobs=cfg['general']['n_jobs'], scoring="roc_auc", verbose=True)
     time_decod.fit(X, y)
 
     coef = get_coef(time_decod, "patterns_", inverse_transform=True)
@@ -123,11 +139,11 @@ def eval_oddball(S, raw, epoch_in=None):
     
     joint_kwargs = dict(ts_args=dict(time_unit="s"), topomap_args=dict(time_unit="s"))
 
-    for axis in S['eval_preproc']['plot_axes']:
+    for axis in cfg['eval_preproc']['plot_axes']:
         evoked_time_gen.plot_joint(
             times="peaks", 
             title=f"decode pattern - {classes_title}", 
-            picks=pick_axis(evoked_time_gen, axis),
+            picks=pick_axis(evoked_time_gen, axis, cfg['info']['sensor_wildcard']),
             **joint_kwargs,
             )
 
