@@ -160,9 +160,9 @@ def set_preproc_params(cfg, config_path=""):
         sensor_wildcard: '^..\\[{axis}]$'
 
     general:
-        save_name: "test-preproc"
         save_label: "test-preproc_"
-        save_preproc: True
+        save_raw: True
+        save_epochs: True
         save_param: True
         save_report: True
         n_jobs: -1
@@ -198,7 +198,7 @@ def set_preproc_params(cfg, config_path=""):
 
     temporal_filter:
         run: True
-        plot: True
+        plot: False
         plot_topos: False
         plot_bands: {
             'Delta (0-4 Hz)': [0, 4], 
@@ -304,6 +304,7 @@ def make_paths(cfg):
 
     print("\n\n\nMaking paths ---------------------------------------------------\n")
     if cfg['participant']['do_BIDS']:
+        
         bids_path = BIDSPath(
             subject = f"{cfg['participant']['id']:03}", 
             session = f"{cfg['participant']['session']:02}", 
@@ -335,8 +336,10 @@ def make_paths(cfg):
 
     preproc_dir = os.path.join(cfg['participant']['data_root'], "derivatives", "preproc")
     os.makedirs(preproc_dir, exist_ok=True)
-    cfg['general']['preproc_fname'] = os.path.join(preproc_dir, f"{bids_path.basename}_{cfg['general']['save_label']}_preproc_epo.fif")
-    cfg['general']['param_fname'] = os.path.join(preproc_dir, f"{bids_path.basename}_{cfg['general']['save_label']}_preproc_params.json")
+
+    cfg['general']['raw_savename'] = os.path.join(preproc_dir, f"{bids_path.basename}_{cfg['general']['save_label']}_preproc-raw.fif")
+    cfg['general']['epochs_savename'] = os.path.join(preproc_dir, f"{bids_path.basename}_{cfg['general']['save_label']}_preproc-epo.fif")
+    cfg['general']['param_savename'] = os.path.join(preproc_dir, f"{bids_path.basename}_{cfg['general']['save_label']}_preproc-params.json")
 
     report_dir = os.path.join(cfg['participant']['data_root'], "derivatives", "report")
     os.makedirs(report_dir, exist_ok=True)
@@ -956,12 +959,17 @@ def reject_epoch(cfg, epochs):
 
 
 
-def save_preproc(cfg, epochs):
+def save_preproc(cfg, raw, epochs):
     # save preproc data ==========================================================================================================
     print("\n\n\nSaving preproc data ---------------------------------------------------\n")
 
-    print(f"saving preproc data to {cfg['general']['preproc_fname']}")
-    epochs.save(cfg['general']['preproc_fname'], overwrite=True)
+    if cfg['general']['save_raw']:
+        print(f"saving raw data to {cfg['general']['raw_savename']}")
+        raw.save(cfg['general']['raw_savename'], overwrite=True)
+
+    if cfg['general']['save_epochs']:
+        print(f"saving epoched data to {cfg['general']['epochs_savename']}")
+        epochs.save(cfg['general']['epochs_savename'], overwrite=True)
 
 
    
@@ -974,7 +982,7 @@ def save_params(cfg):
     print("\n\n\nSaving fitting parameters ---------------------------------------------------\n")
 
     # Save parameters to json
-    print(f"saving parameters to {cfg['general']['param_fname']}")
+    print(f"saving parameters to {cfg['general']['param_savename']}")
 
     # Convert any non-serializable objects to strings
     param_save = deepcopy(cfg)
@@ -984,7 +992,7 @@ def save_params(cfg):
                 param_save[section][key] = str(value)
 
     # Save to json
-    with open(cfg['general']['param_fname'], 'w') as f:
+    with open(cfg['general']['param_savename'], 'w') as f:
         json.dump(param_save, f, indent=4)
 
     del param_save
@@ -999,7 +1007,7 @@ def save_report(cfg, raw, raw_emptyroom, epochs, ica):
     print("\n\n\nSaving report ---------------------------------------------------\n")
 
     report = mne.Report(verbose=True,
-                        info_fname=cfg['general']['preproc_fname'],
+                        info_fname=cfg['general']['epochs_savename'],
                         subject=f"{cfg['participant']['id']:03}",
                         title="Preprocessing Report",
                         )
@@ -1168,8 +1176,8 @@ def run_preproc(config_path=""):
 
 
     # save preproc data ---------------------------------------------------------
-    if cfg['general']['save_preproc']:
-        save_preproc(cfg, epochs)
+    if cfg['general']['save_raw'] or cfg['general']['save_epochs']:
+        save_preproc(cfg, raw, epochs)
     else:
         print("\nno save ------------------------------------\n")
 
