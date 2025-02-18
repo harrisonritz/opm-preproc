@@ -71,7 +71,6 @@ def misc_axis(self, axis='Z', sensor_wildcard=lambda axis: f"^..\\[{axis}]$"):
 
     Notes
     -----
-    - Channel names must follow the pattern 'XX[Y]' where Y is the axis
     - Creates a copy to preserve the original data
 
     Harrison Ritz, 2025
@@ -133,6 +132,25 @@ def print_memory_usage():
 
 
 def set_preproc_params(cfg, config_path=""):
+    """
+    Initialize and update preprocessing parameters using a baseline configuration and an optional external config file.
+
+    Loads the baseline configuration for an oddball experiment and updates the settings
+    if a configuration file is provided. Also sets sensor-specific configurations and adjusts
+    general parameters (e.g., for speed run mode).
+
+    Parameters
+    ----------
+    cfg : dict
+        An empty or pre-existing configuration dictionary.
+    config_path : str, optional
+        File path to an external YAML configuration file, by default "".
+
+    Returns
+    -------
+    dict
+        The updated configuration dictionary with all preprocessing parameters.
+    """
 
     # set-up configuration ==========================================================================================================
     print("\n\n\nloading configuration ---------------------------------------------------\n")
@@ -245,7 +263,7 @@ def set_preproc_params(cfg, config_path=""):
         reject_plot: False
         method: 'osl'
         ar-interp: [0, 1, 2, 3]
-
+    
     """
     
 
@@ -264,6 +282,7 @@ def set_preproc_params(cfg, config_path=""):
     # Evaluate sensor wildcard ---------------------------------------------------------
     wildcard = cfg['info']['sensor_wildcard'] 
     cfg['info']['sensor_wildcard'] = lambda axis: wildcard.format(axis=axis)
+
 
     # Adjust general parameters if needed ---------------------------------------------------------
     if cfg['general']['speed_run']:
@@ -301,9 +320,25 @@ def set_preproc_params(cfg, config_path=""):
 
 
 def make_paths(cfg):
+    """
+    Construct and verify directory paths for data storage and output based on the configuration.
+
+    Creates necessary directories for ICA, preprocessed data, and reports. Updates the configuration
+    with the file paths required to save raw data, epoched data, parameters, and reports.
+
+    Parameters
+    ----------
+    cfg : dict
+        Configuration dictionary containing participant and general settings.
+
+    Returns
+    -------
+    dict
+        The updated configuration with all required file paths.
+    """
 
     print("\n\n\nMaking paths ---------------------------------------------------\n")
-    if cfg['participant']['do_BIDS']:
+    if (cfg['participant']['do_BIDS']):
         
         bids_path = BIDSPath(
             subject = f"{cfg['participant']['id']:03}", 
@@ -324,7 +359,7 @@ def make_paths(cfg):
         cfg['participant']['emptyroom_path'] = emptyroom_path
 
     elif cfg['participant']['data_path']:
-        print('BIDS path not set. Using manual path.')
+        print('BIDS path not set. EDIT THIS LINE.')
     else:
         warnings.warn("BIDS path not set. Add code here to set the file path manually.")
 
@@ -351,6 +386,23 @@ def make_paths(cfg):
 
 
 def read_data(cfg):
+    """
+    Read raw and empty room data from a BIDS-compliant dataset.
+
+    Loads the raw MEG file along with the corresponding empty room file using mne_bids.
+    Optionally plots the power spectral density (PSD) of the data, and updates the configuration
+    with the sampling frequency and line frequency.
+
+    Parameters
+    ----------
+    cfg : dict
+        Configuration dictionary specifying data paths and participant parameters.
+
+    Returns
+    -------
+    tuple
+        A tuple containing the updated configuration, the raw data, and the empty room raw data.
+    """
 
     # read-in data ==========================================================================================================
     print("\n\n\nReading in data ---------------------------------------------------\n")
@@ -408,6 +460,26 @@ def read_data(cfg):
 
 
 def channel_reject(cfg, raw, raw_emptyroom=None):
+    """
+    Identify and mark bad channels in MEG data using various rejection methods.
+
+    Applies one of several channel rejection methods (e.g., OSL, Maxwell, manual, RANSAC) 
+    as specified in the configuration. Optionally plots the results of the channel rejection.
+
+    Parameters
+    ----------
+    cfg : dict
+        Configuration dictionary with channel rejection settings.
+    raw : mne.io.Raw
+        The raw MEG data to process.
+    raw_emptyroom : mne.io.Raw, optional
+        The empty room data required for some rejection methods, by default None.
+
+    Returns
+    -------
+    tuple
+        Updated configuration and raw data with bad channels marked.
+    """
     # channel rejection ==========================================================================================================
     
     
@@ -548,6 +620,25 @@ def channel_reject(cfg, raw, raw_emptyroom=None):
 
 
 def hfc_proj(cfg,raw):
+    """
+    Apply harmonic field correction (HFC) or AMM to the raw MEG data.
+
+    Computes the appropriate projection for HFC/AMM based on the configuration settings.
+    Adds the computed projection to the raw data and, if enabled, applies the projection.
+    Also provides visual comparison of the power spectra before and after applying HFC.
+
+    Parameters
+    ----------
+    cfg : dict
+        Configuration dictionary containing HFC settings.
+    raw : mne.io.Raw
+        The raw MEG data.
+
+    Returns
+    -------
+    tuple
+        The updated configuration and the raw data after the HFC projection.
+    """
     # harmonic field correction ==========================================================================================================
     print("\n\n\nHarmonic Field Correction ---------------------------------------------------\n")
 
@@ -657,6 +748,25 @@ def hfc_proj(cfg,raw):
 
 
 def temporal_filter(cfg, raw):
+    """
+    Filter temporal signals from the raw MEG data.
+
+    Performs a notch filter (using spectrum fit or traditional method) followed by
+    separate high-pass and low-pass filtering. Optionally, it plots the power spectral
+    density before and after filtering and may display topographic maps.
+
+    Parameters
+    ----------
+    cfg : dict
+        Configuration dictionary with temporal filtering parameters.
+    raw : mne.io.Raw
+        The raw MEG data.
+
+    Returns
+    -------
+    tuple
+        The updated configuration and the temporally filtered raw data.
+    """
     # resample & filter ==========================================================================================================
     print("\n\n\nTemporal Filter ---------------------------------------------------\n")
 
@@ -753,6 +863,26 @@ def temporal_filter(cfg, raw):
 
 
 def segment_reject(cfg,raw,metric='std'):
+    """
+    Remove continuous segments of the data based on statistical metrics.
+
+    Uses either the 'kurtosis' or 'std' metric to detect and reject segments containing artifacts.
+    Optionally allows for review of the affected segments through plotting.
+
+    Parameters
+    ----------
+    cfg : dict
+        Configuration dictionary with segment rejection parameters.
+    raw : mne.io.Raw
+        The raw MEG data.
+    metric : str, optional
+        The metric for segment rejection ('kurtosis' or 'std'), by default 'std'.
+
+    Returns
+    -------
+    tuple
+        Updated configuration and raw data with bad segments removed.
+    """
     # reject continious segments ==========================================================================================================
     print('\n\nsegment rejection ---------------------------------------------------\n')
 
@@ -806,6 +936,25 @@ def segment_reject(cfg,raw,metric='std'):
 
 
 def fit_ica(cfg, raw):
+    """
+    Fit an Independent Component Analysis (ICA) model to the MEG data.
+
+    Prepares the data for ICA by filtering and excluding bad channels. Loads a precomputed ICA
+    model if available; otherwise, computes a new ICA solution. Optionally performs automatic
+    labeling of artifact components and visualizes the ICA components and sources.
+
+    Parameters
+    ----------
+    cfg : dict
+        Configuration dictionary containing ICA parameters.
+    raw : mne.io.Raw
+        The raw MEG data.
+
+    Returns
+    -------
+    tuple
+        The updated configuration and the fitted ICA object.
+    """
     # ICA ==========================================================================================================
     print("\n\n\nICA ---------------------------------------------------\n")
 
@@ -888,6 +1037,26 @@ def fit_ica(cfg, raw):
 
 
 def create_epoch(cfg, raw, ica):
+    """
+    Create epochs from the preprocessed raw data and apply ICA corrections.
+
+    Generates epochs using predefined time windows and decimation. If an ICA model is provided,
+    overlays its effects on the epochs and applies the ICA correction.
+
+    Parameters
+    ----------
+    cfg : dict
+        Configuration dictionary with parameters for epoch creation.
+    raw : mne.io.Raw
+        The raw MEG data.
+    ica : mne.preprocessing.ICA or None
+        The ICA object for artifact removal, if available.
+
+    Returns
+    -------
+    tuple
+        The updated configuration and the created epochs object.
+    """
     # create standard & ICA epochs ==========================================================================================================
     print("\n\n\nEpoch ---------------------------------------------------\n")
 
@@ -911,7 +1080,24 @@ def create_epoch(cfg, raw, ica):
 
 
 def reject_epoch(cfg, epochs):
+    """
+    Reject epochs containing artifacts based on configured criteria.
 
+    Supports epoch rejection using either OSL or Autoreject methods. If a method is incorrectly
+    specified, an exception is raised.
+
+    Parameters
+    ----------
+    cfg : dict
+        Configuration dictionary with epoch rejection settings.
+    epochs : mne.Epochs
+        The epoched MEG data.
+
+    Returns
+    -------
+    tuple
+        Updated configuration and epochs with bad epochs removed.
+    """
     # Epoch rejection 1 ==========================================================================================================
     print("\n\n\nEpoch rejection ---------------------------------------------------\n")
 
@@ -960,6 +1146,24 @@ def reject_epoch(cfg, epochs):
 
 
 def save_preproc(cfg, raw, epochs):
+    """
+    Save the preprocessed raw and epoched MEG data to disk.
+
+    Checks configuration flags and writes the preprocessed data files to the specified locations.
+
+    Parameters
+    ----------
+    cfg : dict
+        Configuration dictionary with saving preferences.
+    raw : mne.io.Raw
+        The preprocessed raw MEG data.
+    epochs : mne.Epochs
+        The epoched MEG data.
+
+    Returns
+    -------
+    None
+    """
     # save preproc data ==========================================================================================================
     print("\n\n\nSaving preproc data ---------------------------------------------------\n")
 
@@ -978,6 +1182,21 @@ def save_preproc(cfg, raw, epochs):
 
 
 def save_params(cfg):
+    """
+    Save preprocessing parameters to a JSON file.
+
+    Converts non-serializable items within the configuration to strings before saving.
+    Writes the complete configuration to disk as a JSON file.
+
+    Parameters
+    ----------
+    cfg : dict
+        The configuration dictionary containing all preprocessing parameters.
+
+    Returns
+    -------
+    None
+    """
     # save preproc data ==========================================================================================================
     print("\n\n\nSaving fitting parameters ---------------------------------------------------\n")
 
@@ -1003,6 +1222,29 @@ def save_params(cfg):
 
 
 def save_report(cfg, raw, raw_emptyroom, epochs, ica):
+    """
+    Generate and save a comprehensive report of the preprocessing pipeline.
+
+    Constructs an MNE Report by incorporating system information,
+    raw data, empty room data, ICA outputs, and epochs, and saves the report as an HTML file.
+
+    Parameters
+    ----------
+    cfg : dict
+        Configuration dictionary with report generation settings.
+    raw : mne.io.Raw
+        The preprocessed raw MEG data.
+    raw_emptyroom : mne.io.Raw
+        The preprocessed empty room data.
+    epochs : mne.Epochs
+        The epoched MEG data.
+    ica : mne.preprocessing.ICA
+        The ICA object used for artifact correction.
+
+    Returns
+    -------
+    None
+    """
     # save report ==========================================================================================================
     print("\n\n\nSaving report ---------------------------------------------------\n")
 
@@ -1075,7 +1317,23 @@ def save_report(cfg, raw, raw_emptyroom, epochs, ica):
 
 
 def run_preproc(config_path=""):
+    """
+    Execute the full preprocessing pipeline for OPM data.
 
+    Initializes configurations, reads data, applies artifact rejection, filtering,
+    harmonic field correction, ICA, epoch creation and rejection, evaluation, and finally
+    saves the processed data, parameter configurations, and a detailed report.
+
+    Parameters
+    ----------
+    config_path : str, optional
+        Optional file path to an external YAML configuration file to override baseline parameters,
+        by default "".
+
+    Returns
+    -------
+    None
+    """
     # %% init ==========================================================================================================
 
     # set params ---------------------------------------------------------

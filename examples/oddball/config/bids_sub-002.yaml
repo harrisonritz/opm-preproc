@@ -1,8 +1,8 @@
 
 dirs:
         data_dir: "/Users/hr0283/Projects/opm-preproc/examples/oddball/raw"         # UPDATE THIS PATH
-        bids_dir: "/Users/hr0283/Projects/opm-preproc/examples/oddball/bids"        # UPDATE THIS PATH
         emptyroom_dir: "/Users/hr0283/Projects/opm-preproc/examples/oddball/raw"    # UPDATE THIS PATH
+        bids_dir: "/Users/hr0283/Projects/opm-preproc/examples/oddball/bids"        # UPDATE THIS PATH
 
 session:
         ids: [2]
