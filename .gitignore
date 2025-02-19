@@ -4,6 +4,7 @@
 src/examples
 examples/oddball/bids
 examples/oddball/raw
+src/custom_eval
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

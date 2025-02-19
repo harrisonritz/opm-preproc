@@ -204,6 +204,7 @@ def set_preproc_params(cfg, config_path=""):
         filter: True
         eSSS: False
         sec: 1.0
+        interpolate_bads: False
 
     HFC:
         run: True
@@ -367,7 +368,7 @@ def make_paths(cfg):
 
     ica_dir = os.path.join(cfg['participant']['data_root'], "derivatives", "ICA")
     os.makedirs(ica_dir, exist_ok=True)
-    cfg['general']['ica_fname'] = os.path.join(ica_dir, f"{bids_path.basename}-ica.fif")
+    cfg['general']['ica_savename'] = os.path.join(ica_dir, f"{bids_path.basename}-ica.fif")
 
     preproc_dir = os.path.join(cfg['participant']['data_root'], "derivatives", "preproc")
     os.makedirs(preproc_dir, exist_ok=True)
@@ -378,7 +379,7 @@ def make_paths(cfg):
 
     report_dir = os.path.join(cfg['participant']['data_root'], "derivatives", "report")
     os.makedirs(report_dir, exist_ok=True)
-    cfg['general']['report_fname'] = os.path.join(report_dir, f"{bids_path.basename}_{cfg['general']['save_label']}_preproc_report.html")
+    cfg['general']['report_savename'] = os.path.join(report_dir, f"{bids_path.basename}_{cfg['general']['save_label']}_preproc_report.html")
 
     print("\n---------------------------------------------------\n")
     return cfg
@@ -604,6 +605,14 @@ def channel_reject(cfg, raw, raw_emptyroom=None):
 
     print(f"identified {len(raw.info['bads'])} bad channels...")
     print('bads: ', raw.info['bads'])
+
+    # interpolate bad channels
+    if cfg['channel_reject']['interpolate_bads']:
+        raw.interpolate_bads()
+        print('interpolated bad channels')
+    else:
+        print('no channel interpolation')
+
 
 
     if cfg['channel_reject']['plot']:
@@ -965,10 +974,10 @@ def fit_ica(cfg, raw):
         raw_ica = raw.copy().pick(picks="meg", exclude=raw.info['bads'])
 
     # load for run
-    if cfg['ICA']['load'] and os.path.isfile(cfg['general']['ica_fname']):
+    if cfg['ICA']['load'] and os.path.isfile(cfg['general']['ica_savename']):
 
-        print(f"loading ICA from {cfg['general']['ica_fname']}")
-        ica = mne.preprocessing.read_ica(cfg['general']['ica_fname'])
+        print(f"loading ICA from {cfg['general']['ica_savename']}")
+        ica = mne.preprocessing.read_ica(cfg['general']['ica_savename'])
 
     else:        
 
@@ -1015,7 +1024,11 @@ def fit_ica(cfg, raw):
     for axis in cfg['ICA']['plot_axes']:
         
         # plot all components
-        plot_ica_axis(ica, raw_ica, axis=axis)
+        plot_ica_axis(ica, 
+                      raw_ica, 
+                      axis=axis,  
+                      sensor_wildcard=cfg['info']['sensor_wildcard']
+                      )
 
        
 
@@ -1024,8 +1037,8 @@ def fit_ica(cfg, raw):
     del raw_ica
 
     if cfg['ICA']['save']:
-        print(f"saving ICA to {cfg['general']['ica_fname']}")
-        ica.save(cfg['general']['ica_fname'])
+        print(f"saving ICA to {cfg['general']['ica_savename']}")
+        ica.save(cfg['general']['ica_savename'], overwrite=True)
     else:
         print("not saving ICA")
 
@@ -1291,8 +1304,8 @@ def save_report(cfg, raw, raw_emptyroom, epochs, ica):
 
 
     # save report
-    print(f"saving report to {cfg['general']['report_fname']}")
-    report.save(cfg['general']['report_fname'], overwrite=True)
+    print(f"saving report to {cfg['general']['report_savename']}")
+    report.save(cfg['general']['report_savename'], overwrite=True)
 
 
                       
