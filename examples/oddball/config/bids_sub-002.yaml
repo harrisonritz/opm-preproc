@@ -1,16 +1,19 @@
 
 dirs:
-        data_dir: "/Users/hr0283/Projects/opm-preproc/examples/oddball/raw"         # UPDATE THIS PATH
-        emptyroom_dir: "/Users/hr0283/Projects/opm-preproc/examples/oddball/raw"    # UPDATE THIS PATH
-        bids_dir: "/Users/hr0283/Projects/opm-preproc/examples/oddball/bids"        # UPDATE THIS PATH
+        data_dir: "/Users/hr0283/Projects/opm-preproc/examples/oddball/raw"             # UPDATE THIS PATH
+        emptyroom_dir: "/Users/hr0283/Projects/opm-preproc/examples/oddball/raw"        # UPDATE THIS PATH
+        bids_dir: "/Users/hr0283/Projects/opm-preproc/examples/oddball/bids"            # UPDATE THIS PATH
+        anat_path:                                                                      # UPDATE THIS PATH
 
 session:
-        ids: [2]
+        ids: 2
         experiment: "oddball_pilot"
         session: "01"
-        run_prefix: [["20241218_153301", "20241218_155254"]]
-        emptyroom_prefix: ["20241218_160936"]
-        tasks: ["oddball", "oddball"]
+        run_prefix:
+                - "20241218_153301"
+                - "20241218_155254"
+        emptyroom_prefix: "20241218_160936"
+        tasks: "oddball"
 
 trigger:
         stim_id: ["Trigger1[Z]", "Trigger2[Z]"]
