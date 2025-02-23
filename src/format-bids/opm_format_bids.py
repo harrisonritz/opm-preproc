@@ -9,7 +9,6 @@
 import mne
 import mne_bids
 import os
-from networkx import antichains
 import numpy as np
 import datetime
 import yaml
